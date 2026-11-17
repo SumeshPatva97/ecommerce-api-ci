@@ -1,0 +1,63 @@
+name: CI (ecommerce-api)
+
+# B0-c scaffold: validates lint/typecheck/build/tests/format and Prisma schema (offline).
+# DB integration/migration-apply jobs require MySQL service and approved env/secrets; add when
+# B0-b Part 2 and integration tests are ready. Do not push secrets.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ecommerce-api
+    env:
+      # Placeholder only for offline Prisma validation in CI (no DB connection).
+      DATABASE_URL: mysql://user:placeholder@localhost:3306/ecommerce_ci
+      NODE_ENV: test
+      APP_TIMEZONE: Asia/Kolkata
+      TZ: UTC
+      API_BASE_URL: http://localhost:4000
+      STOREFRONT_URL: http://localhost:5173
+      ADMIN_URL: http://localhost:5174
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174
+      LOG_LEVEL: silent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ecommerce-api/.nvmrc
+          cache: npm
+          cache-dependency-path: ecommerce-api/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma validate (offline)
+        run: npx prisma validate
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test

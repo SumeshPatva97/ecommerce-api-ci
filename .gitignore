@@ -1,0 +1,24 @@
+# Dependencies & build output
+node_modules/
+dist/
+coverage/
+
+# Environment files — never commit secrets (SECURITY_GUIDELINES §13)
+.env
+.env.*
+!.env.example
+
+# Logs & OS/editor noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local export/storage output (future increments)
+storage/
+
+# Prisma generated client (B0-b Part 1 output; not committed)
+src/generated/

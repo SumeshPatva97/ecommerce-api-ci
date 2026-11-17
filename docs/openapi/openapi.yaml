@@ -1,0 +1,73 @@
+openapi: 3.1.0
+info:
+  title: '[BRAND_NAME] E-commerce API'
+  version: 0.1.0-draft
+  description: |
+    B0-c scaffold OpenAPI document. NOT complete and NOT yet aligned with implemented business
+    endpoints (no B1–B9 business routes implemented at scaffold time). The canonical contract is
+    `project-documentation/04-backend/API_DOCUMENTATION.md` and must be reflected here as endpoints
+    are implemented and verified. Do not treat this file as evidence of endpoint implementation.
+servers:
+  - url: http://localhost:4000
+    description: Local development (placeholder)
+tags:
+  - name: Health
+    description: Liveness/readiness probes (implemented in B0-a)
+paths:
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      operationId: getHealthLive
+      responses:
+        '200':
+          description: Service process is live
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      operationId: getHealthReady
+      responses:
+        '200':
+          description: Service is ready to accept traffic (checks depend on configured readiness probes)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '503':
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Planned JWT auth (not implemented in scaffold). Exact claims/flows per approved API docs.
+  schemas:
+    ErrorEnvelope:
+      type: object
+      description: Canonical error envelope placeholder; align with implemented error codes/responses.
+      additionalProperties: true
+    SuccessEnvelope:
+      type: object
+      description: Canonical success envelope placeholder; align with PROJECT_CONTEXT/API_DOCUMENTATION.
+      additionalProperties: true
+x-status:
+  phase4:
+    b0c: scaffold
+    businessEndpointsImplemented: 0
+    canonicalContract: project-documentation/04-backend/API_DOCUMENTATION.md
+    notes:
+      - Add paths, schemas, security, examples, and error responses per module as implemented and tested.
+      - Validate OpenAPI against implementation before G4.
