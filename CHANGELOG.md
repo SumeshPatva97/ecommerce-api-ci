@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### Status — G2/G3 preparation and G3 migration configuration (2026-11-18)
+
+- **G6:** **PASS — ACCEPTED (2026-11-17)** preserved. **Increment B IN PROGRESS; Phase 4 IN PROGRESS — NOT APPROVED.**
+- **G3 configuration (offline only):** added `prisma.migration.config.ts` (database-writing commands), `src/core/config/migrationTarget.ts` (fail-closed target guard), `.env.migration.example`, `db:migrate:status`/`db:migrate:deploy` scripts, and 16 guard tests (**10 files / 193 tests** pass). **No MySQL connection, no migration executed.** Gate **G3 remains NOT STARTED** — `ecommerce_migrator@localhost`, grants and `.env.migration` are user-managed.
+- **G2 procedure:** `docs/INCREMENT-B-G2-BACKUP-RESTORE-DRILL.md` — single-schema dump **without `--databases`** (prevents a restore from targeting the source), `--routines --events --triggers`, guard scan, SHA-256, restore into `ecommerce_restore_check`, PowerShell 5.1-compatible. Gate **G2 remains NOT STARTED** (user-executed).
+- **G7 readiness:** **NOT READY** — blocked by G2/G3 acceptance (evidence checklist empty), the user-created and verified-empty `ecommerce_migrate_test`, the temporary scratch grant, independent baseline-hash confirmation, and explicit authorization (`docs/INCREMENT-B-G7-READINESS-REVIEW.md`).
+- **G2/G3 safety review (2026-11-18):** G2 procedure re-checked for PowerShell 5.1 and MySQL 8.4 correctness (positional single-schema dump, explicit `$restoreDb`, scratch pre-check, source-unchanged check, expanded abort list); G3 config verified against the documentation; guard protocol message corrected to state that `mariadb://` is also accepted. Added `docs/INCREMENT-B-G2-G3-EVIDENCE-CHECKLIST.md` (P4-B-EVID-01) and `docs/ENV-BOM-REMEDIATION.md` (P4-ENV-01). G7 prerequisites expanded to ten criteria.
+- **BOM recheck:** a byte-level check found **no BOM** in the current `.env` (80 bytes); the remediation procedure is retained for recurrence and for `.env.migration`. The file was not read beyond its first bytes and was not modified.
+- **Scratch-grant recommendation:** temporary, database-scoped grant on `ecommerce_migrate_test.*` for `ecommerce_migrator`, verified before G7 and revoked afterwards; no `*.*`, no global privilege, no change to `ecommerce_app`.
+- **G3/G7 target–grant consistency correction (2026-11-18):** the G3 `ecommerce_dev.*` grant and the G7 `ecommerce_migrate_test` target are now explicitly separated in every document. A dev-scoped grant confers no scratch privileges, and `MIGRATION_EXPECTED_DATABASE` is a name guard only. G3 evidence excludes the scratch grant; G7 has its own preflight evidence (scratch DB exists/empty, scratch grant, hash, authorization); a documented target switch (URL path + expected name) is required between G7 and G8. Also corrected the planning document's remaining `mysqldump --databases` snippet and the risk note that implied migrations use `DATABASE_URL`.
+- **CI:** workflow paths corrected because `ecommerce-api` is the repository root (removed the `ecommerce-api/` prefix from `working-directory`, `.nvmrc` and cache path).
+- **Local environment finding:** the 2026-11-18 audit initially reported a UTF-8 BOM in the local `ecommerce-api/.env`; a byte-level recheck during the G2/G3 safety review found **no BOM** (80 bytes). The file was never read beyond its first bytes and was not modified. The remediation procedure for recurrence (and for `.env.migration`) is in `docs/ENV-BOM-REMEDIATION.md`.
+- **Secrets:** `.env` content never read/printed; `.env.migration` is git-ignored; only placeholder examples are tracked.
+- **Repository:** published to `https://github.com/SumeshPatva97/ecommerce-api-ci` (branch `main`, commit `baa5620`) after the 2026-11-17 entry below. No Git operation was performed in this update.
+
+### Status — Phase 4 autonomous verification and planning (2026-11-18)
+
+- **G3 read-only checks (actual):** `MySQL84` = Running/Automatic; TCP 3306 listening on `[::]:3306`; client `mysql.exe 8.4.9`; baseline SHA-256 matches `154D2C8E…7A6BB`; `.env` 80 bytes, no BOM; `.env.migration` absent; no saved MySQL login path. Offline suite: format/lint/typecheck/build exit 0; **10 files / 193 tests pass**; `prisma validate` PASS; migration `prisma validate --config` PASS; mismatch, system-schema and missing-URL cases all fail closed (exit 1).
+- **G3 steps 3–7 remain USER ACTION:** no credential-free admin login exists; a read-only capture script (SELECT/SHOW only, hash-redacting) was prepared outside the repo. **No SQL, user, grant or database change was executed.**
+- **G2 procedure gap fixed:** added a dump **completeness-marker** check (final `-- Dump completed` line) and evidence row **G2-19**, so a truncated dump cannot pass on size alone. G2 still **NOT STARTED**.
+- **New planning documents:** `docs/PHASE4-B1-B9-DECISION-REGISTER.md` (P4-DEC-01 — the 12 open questions and 3 confirmations from `PROJECT_CONTEXT.md` §17.3, with documented working assumptions only, no decisions made) and `docs/PHASE4-BLOCKER-REGISTER-AND-ROADMAP.md` (P4-ROAD-01 — live blockers, G3 step status, G4 completion-criteria gap and dependency-ordered roadmap).
+- **Unchanged:** G6 PASS — ACCEPTED; G2/G3 USER EXECUTION PENDING; G7 NOT READY — NOT AUTHORIZED; Increment B IN PROGRESS; Phase 4 IN PROGRESS — NOT APPROVED; B1–B9 NOT STARTED; 0 of 80 business endpoints implemented.
+
 ### Status — Phase 4 progress update (2026-11-17)
 
 - **Phase 3:** final verification audit completed (documentation consistent; **APPROVED AND COMPLETE — 2026-11-13** unchanged). Report: `project-documentation/12-phase3-database-design/PHASE3_FINAL_VERIFICATION_REPORT.md`.

@@ -1,4 +1,6 @@
 // Request augmentation for values attached by core middleware.
+import type { AuthContext } from '../modules/rbac/permission.service.js';
+
 export {};
 
 declare global {
@@ -12,6 +14,8 @@ declare global {
         query?: unknown;
         body?: unknown;
       };
+      /** Set by `authenticate` / `optionalAuthenticate` (stage 6) once the session is verified. */
+      authz?: AuthContext;
     }
   }
 }

@@ -7,7 +7,12 @@ import { AppError } from '../../src/core/errors/AppError.js';
 import { ok } from '../../src/core/http/envelope.js';
 import { PAGE_LIMITS, paginationQuery } from '../../src/core/http/pagination.js';
 import { getValidated, validate } from '../../src/core/middleware/validate.js';
-import { ADMIN_ORIGIN, STOREFRONT_ORIGIN, buildTestApp } from '../helpers/testApp.js';
+import {
+  ADMIN_ORIGIN,
+  PRODUCTION_SECRETS,
+  STOREFRONT_ORIGIN,
+  buildTestApp,
+} from '../helpers/testApp.js';
 
 /** Test-only routes mounted through the real middleware pipeline under /api/v1. */
 function fixtureRouter(): Router {
@@ -103,6 +108,7 @@ describe('security headers', () => {
   it('adds HSTS (without preload) in production', async () => {
     const { app } = buildTestApp({
       env: {
+        ...PRODUCTION_SECRETS,
         NODE_ENV: 'production',
         API_BASE_URL: 'https://api.example.com',
         STOREFRONT_URL: 'https://www.example.com',

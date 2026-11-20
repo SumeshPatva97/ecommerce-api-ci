@@ -1,3 +1,6 @@
+# SUPERSEDED (2026-11-19): the authoritative, generated spec is docs/openapi/openapi.json
+# (scripts/generate-openapi.ts; drift check: `npx tsx scripts/generate-openapi.ts --check`).
+# This B0-c scaffold is kept only because historical reports reference it.
 openapi: 3.1.0
 info:
   title: '[BRAND_NAME] E-commerce API'

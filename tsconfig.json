@@ -23,5 +23,13 @@
 
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts", "prisma.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts",
+    "prisma/seed/**/*.ts",
+    "vitest.config.ts",
+    "prisma.config.ts",
+    "prisma.migration.config.ts"
+  ]
 }

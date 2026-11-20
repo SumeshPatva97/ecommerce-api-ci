@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ConfigError, loadConfig } from '../../../src/core/config/index.js';
-import { BASE_TEST_ENV } from '../../helpers/testApp.js';
+import { BASE_TEST_ENV, PRODUCTION_SECRETS } from '../../helpers/testApp.js';
 
 function load(overrides: Record<string, string | undefined> = {}) {
   return loadConfig({ ...BASE_TEST_ENV, ...overrides });
@@ -111,6 +111,7 @@ describe('loadConfig', () => {
 
   it('accepts a valid production configuration', () => {
     const config = load({
+      ...PRODUCTION_SECRETS,
       NODE_ENV: 'production',
       API_BASE_URL: 'https://api.example.com',
       STOREFRONT_URL: 'https://www.example.com',
@@ -192,5 +193,21 @@ describe('loadConfig', () => {
     const secretLooking = 'super-secret-value-123';
     const problems = problemsOf({ API_BASE_URL: secretLooking, PORT: secretLooking }).join('\n');
     expect(problems).not.toContain(secretLooking);
+  });
+});
+
+describe('background jobs and courier webhook secret (Batch 7 missing tests)', () => {
+  it('keeps the scheduler OFF unless JOBS_ENABLED is explicitly true', () => {
+    expect(load({ JOBS_ENABLED: undefined }).jobs.enabled).toBe(false);
+    expect(load({ JOBS_ENABLED: 'false' }).jobs.enabled).toBe(false);
+    expect(load({ JOBS_ENABLED: 'true' }).jobs.enabled).toBe(true);
+    expect(problemsOf({ JOBS_ENABLED: 'maybe' }).join('\n')).toContain('JOBS_ENABLED');
+  });
+
+  it('reads the optional SHIPPING_WEBHOOK_SECRET (unset → undefined)', () => {
+    expect(load({}).integrations.shippingWebhookSecret).toBeUndefined();
+    expect(
+      load({ SHIPPING_WEBHOOK_SECRET: 'courier-test-secret' }).integrations.shippingWebhookSecret,
+    ).toBe('courier-test-secret');
   });
 });

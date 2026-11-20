@@ -16,7 +16,11 @@ const METHODS_WITH_BODY = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  */
 export function requireJsonContentType(): RequestHandler {
   return (req, _res, next) => {
-    if (METHODS_WITH_BODY.has(req.method) && req.is('application/json') === false) {
+    // A body-less action request (`Content-Length: 0`, e.g. POST …/restore) has nothing to parse;
+    // type-is treats a zero length as "has body", so it is excluded explicitly.
+    const emptyBody =
+      req.get('content-length') === '0' && req.get('transfer-encoding') === undefined;
+    if (METHODS_WITH_BODY.has(req.method) && !emptyBody && req.is('application/json') === false) {
       next(new AppError('BAD_REQUEST', 'Content-Type must be application/json.'));
       return;
     }

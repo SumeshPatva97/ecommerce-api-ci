@@ -1,0 +1,200 @@
+/**
+ * Report execution and export-document assembly, shared by the HTTP service and the async export
+ * job (`src/jobs/reportExport.ts`).
+ */
+import type { Queryable } from '../../core/db/transaction.js';
+import { AppError } from '../../core/errors/AppError.js';
+import {
+  DISPLAY_TIMEZONE,
+  formatIstDateTime,
+  type ExportColumn,
+  type ExportDocument,
+  type ExportSheet,
+} from '../../lib/export/index.js';
+import { hasPermission } from '../rbac/permission.service.js';
+import { resolveReportRange, type ReportParams } from './reports.params.js';
+import { requiredPermissions } from './reports.registry.js';
+import type {
+  Paging,
+  ReportDefinition,
+  ReportOutput,
+  ReportRange,
+  Viewer,
+} from './reports.types.js';
+
+/** Sync export limit (OQ-45, settings `reports.sync_export_max_rows`). */
+export const SYNC_EXPORT_MAX_ROWS = 10_000;
+export const SYNC_EXPORT_SETTING_KEY = 'reports.sync_export_max_rows';
+/** PDF exports above this go async (API_DOCUMENTATION §4.17). */
+export const PDF_SYNC_MAX_ROWS = 2_000;
+/** Per-export cap (PROPOSED — OQ-45). */
+export const EXPORT_ROW_CAP = 1_000_000;
+/** Exports may cover up to 3 years (larger on-screen ranges are refused, §2.1). */
+export const EXPORT_MAX_RANGE_DAYS = 1096;
+export const REPORT_FILE_RETENTION_DAYS = 7;
+
+export function missingPermissions(
+  viewer: Viewer,
+  def: ReportDefinition,
+  action: 'view' | 'export',
+): string[] {
+  return requiredPermissions(def, action).filter((k) => !hasPermission(viewer, k));
+}
+
+export interface ExecuteOptions {
+  readonly db: Queryable;
+  readonly def: ReportDefinition;
+  readonly params: ReportParams;
+  readonly viewer: Viewer;
+  readonly now: Date;
+  readonly paging: Paging;
+  readonly maxRangeDays?: number;
+}
+
+export async function executeReport(
+  options: ExecuteOptions,
+): Promise<{ range: ReportRange | null; output: ReportOutput }> {
+  const { def } = options;
+  const range = resolveReportRange(options.params, {
+    dateMode: def.dateMode,
+    maxDays: options.maxRangeDays ?? def.maxRangeDays,
+    now: options.now,
+  });
+  const output = await def.run({
+    db: options.db,
+    params: options.params,
+    range,
+    viewer: options.viewer,
+    now: options.now,
+    paging: options.paging,
+  });
+  return { range, output };
+}
+
+const ECHO_SKIP = new Set(['page', 'limit', 'from', 'to']);
+
+/** Filter echo for responses, exports and audit (only parameters relevant to the request). */
+export function filterEcho(
+  def: ReportDefinition,
+  params: ReportParams,
+  range: ReportRange | null,
+): Record<string, unknown> {
+  const echo: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || ECHO_SKIP.has(k)) continue;
+    echo[k] = v;
+  }
+  if (!def.timeSeries) delete echo.groupBy;
+  return {
+    ...(range === null ? {} : { from: range.from, to: range.to }),
+    ...echo,
+    timezone: DISPLAY_TIMEZONE,
+  };
+}
+
+/** Restricts columns to the requested keys (export `columns`); 422 for unknown keys. */
+export function selectColumns(
+  columns: readonly ExportColumn[],
+  requested: readonly string[] | undefined,
+): readonly ExportColumn[] {
+  if (requested === undefined) return columns;
+  const known = new Set(columns.map((c) => c.key));
+  const unknown = requested.filter((k) => !known.has(k));
+  if (unknown.length > 0) {
+    throw new AppError('VALIDATION_ERROR', undefined, {
+      details: [
+        {
+          field: 'columns',
+          message: `Unknown column(s): ${unknown.join(', ')}.`,
+          meta: { allowed: [...known] },
+        },
+      ],
+    });
+  }
+  const wanted = new Set(requested);
+  return columns.filter((c) => wanted.has(c.key));
+}
+
+const ddmmyyyy = (iso: string): string =>
+  `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
+
+export interface DocumentMeta {
+  readonly brandName: string;
+  readonly generatedAt: Date;
+  readonly generatedBy: string;
+  readonly exportId?: string;
+  readonly columns?: readonly string[];
+}
+
+/** Export document with the §8.1 header block. */
+export function buildExportDocument(
+  def: ReportDefinition,
+  output: ReportOutput,
+  range: ReportRange | null,
+  echo: Record<string, unknown>,
+  meta: DocumentMeta,
+): ExportDocument {
+  const columns = selectColumns(output.columns, meta.columns);
+  const filterParts: string[] = [
+    range === null ? 'Current state' : `${ddmmyyyy(range.from)} to ${ddmmyyyy(range.to)} (IST)`,
+  ];
+  for (const [k, v] of Object.entries(echo)) {
+    if (k === 'from' || k === 'to' || k === 'timezone') continue;
+    if (v === false) continue;
+    filterParts.push(`${k}: ${Array.isArray(v) ? v.join(',') : String(v)}`);
+  }
+  const headerLines: [string, string][] = [
+    ['Filters', filterParts.join(' · ')],
+    [
+      'Generated at',
+      `${formatIstDateTime(meta.generatedAt)} IST (${meta.generatedAt.toISOString()})`,
+    ],
+    ['Generated by', meta.generatedBy],
+    ['Report version', def.version],
+  ];
+  if (meta.exportId !== undefined) headerLines.push(['Export ID', meta.exportId]);
+  headerLines.push(['Currency', 'INR · Amounts tax-inclusive unless stated']);
+  headerLines.push(['Timezone', DISPLAY_TIMEZONE]);
+  const main: ExportSheet = {
+    name: def.title,
+    columns,
+    rows: output.rows,
+    totals: output.totals,
+  };
+  return {
+    title: `${meta.brandName} — ${def.title}`,
+    headerLines,
+    main,
+    ...(output.extraSheets === undefined ? {} : { extraSheets: output.extraSheets }),
+    ...(output.notices === undefined ? {} : { notices: output.notices }),
+    ...(def.footer === undefined ? {} : { footer: def.footer }),
+    generatedAt: meta.generatedAt,
+  };
+}
+
+export function exportFilename(
+  key: string,
+  range: ReportRange | null,
+  now: Date,
+  extension: string,
+): string {
+  const suffix = range === null ? now.toISOString().slice(0, 10) : `${range.from}_${range.to}`;
+  return `${key}_${suffix}.${extension}`;
+}
+
+export async function loadSetting(db: Queryable, key: string): Promise<unknown> {
+  const row = await db.setting.findUnique({ where: { settingKey: key }, select: { value: true } });
+  return row?.value;
+}
+
+export async function syncExportLimit(db: Queryable): Promise<number> {
+  const value = await loadSetting(db, SYNC_EXPORT_SETTING_KEY);
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 100_000
+    ? value
+    : SYNC_EXPORT_MAX_ROWS;
+}
+
+export async function brandName(db: Queryable): Promise<string> {
+  const value = await loadSetting(db, 'store.name');
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : 'Store';
+}

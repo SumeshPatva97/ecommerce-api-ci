@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import type { ErrorCode } from '../errors/errorCodes.js';
 import type { ErrorDetail } from '../errors/AppError.js';
 import type { PageMeta } from './pagination.js';
+import { assertDeclaredSuccessStatus } from './successStatus.js';
 
 /**
  * Canonical response envelopes (PROJECT_CONTEXT.md §8, API_DOCUMENTATION.md §2.2).
@@ -33,7 +34,14 @@ export function ok<T>(
     ...(options.meta === undefined ? {} : { meta: options.meta }),
     requestId: req.requestId,
   };
-  res.status(options.status ?? 200).json(body);
+  const status = options.status ?? 200;
+  const routePath = (req.route as { path?: unknown } | undefined)?.path;
+  assertDeclaredSuccessStatus(
+    res,
+    status,
+    `${req.method} ${req.baseUrl}${typeof routePath === 'string' ? routePath : ''}`,
+  );
+  res.status(status).json(body);
 }
 
 export function buildErrorEnvelope(

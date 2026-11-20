@@ -12,7 +12,9 @@ import { notFound } from './core/middleware/notFound.js';
 import { generalRateLimit } from './core/middleware/rateLimit.js';
 import { requestId } from './core/middleware/requestId.js';
 import { noStore, securityHeaders } from './core/middleware/security.js';
-import { createV1Router } from './routes/v1.js';
+import type { AppContainer } from './container.js';
+import type { ApiModule } from './modules/types.js';
+import { buildModules, createV1Router, createWebhookRouter } from './routes/v1.js';
 
 export const API_V1_PREFIX = '/api/v1';
 
@@ -22,6 +24,10 @@ export interface AppDependencies {
   readiness: Readiness;
   /** Overrides the v1 router (tests mount fixture routes through the real pipeline). */
   v1Router?: Router;
+  /** Feature modules' dependencies; without it only health routes exist (foundation tests). */
+  container?: AppContainer;
+  /** Overrides the module list built from the container (tests). */
+  modules?: readonly ApiModule[];
 }
 
 /**
@@ -30,7 +36,14 @@ export interface AppDependencies {
  * requestId → access log → helmet → [health] → CORS → rate limit → body parse → routes → 404 → errors.
  * Authentication, permissions, re-auth and idempotency stages are added with their modules.
  */
-export function createApp({ config, logger, readiness, v1Router }: AppDependencies): Express {
+export function createApp({
+  config,
+  logger,
+  readiness,
+  v1Router,
+  container,
+  modules,
+}: AppDependencies): Express {
   const app = express();
 
   app.disable('x-powered-by');
@@ -46,9 +59,15 @@ export function createApp({ config, logger, readiness, v1Router }: AppDependenci
 
   app.use(corsPolicy(config));
   app.use(API_V1_PREFIX, generalRateLimit(config));
-  // Webhook routes (raw body for signature verification) will be mounted here, before JSON parsing.
+  const moduleList = container === undefined ? [] : (modules ?? buildModules(container));
+  // Webhooks: raw body (1 MB) for signature verification, mounted before JSON parsing (§16).
+  app.use(
+    `${API_V1_PREFIX}/webhooks`,
+    express.raw({ type: '*/*', limit: '1mb' }),
+    createWebhookRouter(moduleList),
+  );
   app.use(API_V1_PREFIX, requireJsonContentType(), jsonBody(config));
-  app.use(API_V1_PREFIX, v1Router ?? createV1Router());
+  app.use(API_V1_PREFIX, v1Router ?? createV1Router(container, moduleList));
 
   app.use(notFound());
   app.use(errorHandler(logger));

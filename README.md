@@ -15,16 +15,20 @@ Canonical documentation lives in `project-documentation/` (sibling folder). The 
 
 ## Status
 
-**Phase 4 in progress — NOT YET APPROVED (Gate G4 not met).** B0-a: **APPROVED AND COMPLETE (2026-11-16)**. B0-b Part 1: **complete for authorized offline scope** (Prisma 7.10.1, 67 models/50 enums, schema/config validated; no DB connection/migrations/SQL). B0-b Part 2: **pending/unverified** — MySQL 8.4.9 installed and `MySQL84` service **Running/Automatic** with localhost:3306 reachable (verified 2026-11-17), but local `ecommerce_dev`/`ecommerce_app`, ignored `.env` `DATABASE_URL`/secret protection, Prisma runtime connectivity, reviewed migrations, approved SQL-only constraints/indexes, seeds/repeatability, DB integration/migration tests, and backup/restore verification are **not yet completed/verified** (runtime DB client/readiness scaffolding added: `src/core/db/prisma.ts`, server wiring). B0-c: **partial scaffold only** (CI/Dockerfile/OpenAPI stub, provider adapter interfaces+mocks, jobs/ops/security docs). B1–B9: **not implemented**.
+**Phase 4 in progress — NOT YET APPROVED (Gate G4 not met).** B0-a: **APPROVED AND COMPLETE (2026-11-16)**. B0-b Part 1: **complete for authorized offline scope** (Prisma 7.10.1, 67 models/50 enums, schema/config validated). B0-b Part 2: **Increment A PASS**; **Increment B Stage 1 complete** — the reviewed baseline candidate (`prisma/migrations/20261117160425_baseline/migration.sql`, 67 tables, 114 FKs all `ON UPDATE RESTRICT`, 75 CHECKs, 1943 lines) reached **G6 PASS — ACCEPTED (2026-11-17)** for G7 preparation. **No migration has been applied to any database.** G2 (backup/restore drill) is **USER EXECUTION PENDING (Step 1 NOT VERIFIED)**; G3 (migration user) is **NOT ACCEPTED**; G7/G8 are **NOT AUTHORIZED**. B0-c and B1–B9 are implemented as code with **mocked-database tests only**: COMPLETE, NOT YET ACCEPTED, with open questions provisional. The current status is in `docs/PHASE3-PHASE4-MASTER-PROGRESS-REPORT.md`.
 
-**Not built yet / not verified:** live MySQL setup, applied migrations/SQL-only constraints, seeds, DB integration, business modules and documented endpoints, OpenAPI aligned to implementation, production provider integrations, full acceptance/security verification. No Phase 4 approval claimed. No code pushed. See `docs/PHASE4-G4-REVIEW-REPORT.md` and B0-b reports.
+**Not built yet / not verified:** applied migrations/SQL-only constraints, seed runs, MySQL integration tests, production provider integrations, multi-instance operation, full acceptance/security verification. No Phase 4 approval claimed. Published at `https://github.com/SumeshPatva97/ecommerce-api-ci` (branch `main`). See `docs/PHASE4-G4-REVIEW-REPORT.md` and the B0-b reports.
 
 ## Requirements
 
-| Tool    | Version                                                                         |
-| ------- | ------------------------------------------------------------------------------- |
-| Node.js | 22 LTS (`.nvmrc`; minimum 22.13). Tests so far ran on Node 24.22 only (OQ-110). |
-| npm     | 10+ (repository uses `package-lock.json`; use `npm ci`)                         |
+| Tool    | Version                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------- |
+| Node.js | **>= 22.13.0** (`engines`; `.nvmrc` = 22). Tested on 24.12.0. 22-only vs 22 + 24 is OQ-110. |
+| npm     | 10+ (repository uses `package-lock.json`; use `npm ci`)                                     |
+
+**Check `node -v` first.** Node 22.12 and older crash the native `argon2` module, so `npm run dev`, `npm start`
+and `npm test` stop immediately with a "Node.js X is not supported" message. `nvm-windows` ignores `.nvmrc`:
+run `nvm list`, then `nvm use 24.12.0` (or any installed version ≥ 22.13.0).
 
 MySQL and Redis are **not** needed for this increment. When the database increment starts, MySQL 8
 is installed **natively** on development laptops (decision D-37; no Docker Desktop just for MySQL).
@@ -32,9 +36,11 @@ is installed **natively** on development laptops (decision D-37; no Docker Deskt
 ## Getting started
 
 ```bash
+node -v                     # must print v22.13.0 or later
 npm ci                      # install exact locked dependencies
 cp .env.example .env        # local settings; .env is git-ignored
 npm run dev                 # http://localhost:4000 with reload
+npm run dev:worker          # optional: background jobs (only with JOBS_ENABLED=true; exactly one worker)
 ```
 
 Check that it is running:
@@ -49,17 +55,21 @@ variable names and the problem (values are never printed).
 
 ## Scripts
 
-| Script                                   | What it does                                            |
-| ---------------------------------------- | ------------------------------------------------------- |
-| `npm run dev`                            | Start the API with reload (`tsx watch`)                 |
-| `npm run build`                          | Compile TypeScript to `dist/`                           |
-| `npm start`                              | Run the compiled API (`node dist/server.js`)            |
-| `npm test`                               | Run all tests once (Vitest)                             |
-| `npm run test:unit` / `test:integration` | Run one test layer                                      |
-| `npm run test:coverage`                  | Tests with coverage (floors: 80 % lines, 75 % branches) |
-| `npm run typecheck`                      | `tsc --noEmit`                                          |
-| `npm run lint` / `lint:fix`              | ESLint (`--max-warnings 0`)                             |
-| `npm run format` / `format:check`        | Prettier                                                |
+| Script                                   | What it does                                              |
+| ---------------------------------------- | --------------------------------------------------------- |
+| `npm run dev`                            | Start the API with reload (`tsx watch`)                   |
+| `npm run build`                          | Compile TypeScript to `dist/`                             |
+| `npm start`                              | Run the compiled API (`node dist/server.js`)              |
+| `npm run dev:worker`                     | Start the background-job worker with reload (D-61)        |
+| `npm run start:worker`                   | Run the compiled worker (`node dist/worker.js`)           |
+| `npm test`                               | Run all tests once (Vitest)                               |
+| `npm run test:unit` / `test:integration` | Run one test layer                                        |
+| `npm run test:coverage`                  | Tests with coverage (floors: 80 % lines, 75 % branches)   |
+| `npm run typecheck`                      | `tsc --noEmit`                                            |
+| `npm run lint` / `lint:fix`              | ESLint (`--max-warnings 0`)                               |
+| `npm run format` / `format:check`        | Prettier                                                  |
+| `npm run db:migrate:status`              | Migration status via `prisma.migration.config.ts` (gated) |
+| `npm run db:migrate:deploy`              | Apply migrations via `prisma.migration.config.ts` (gated) |
 
 ## Environment variables
 
@@ -82,6 +92,10 @@ Rules:
   variable name (`ADMIN_URL: Must be an absolute http(s) URL.`).
 - Variable names follow REPOSITORY_SETUP_GUIDE.md §9.1 (canonical per R-46). A new variable must be
   added to `.env.example`, the Zod schema, and §9.1 in the same change.
+- Migration commands do **not** use `DATABASE_URL`. They read `MIGRATION_DATABASE_URL` and
+  `MIGRATION_EXPECTED_DATABASE` from the separate, git-ignored `.env.migration` (template:
+  [.env.migration.example](.env.migration.example)). The runtime config never reads them; there is no
+  fallback. See `docs/INCREMENT-B-G3-MIGRATION-CONNECTION.md`.
 
 ## Endpoints available now
 
@@ -99,12 +113,20 @@ and no access logging.
 ```text
 src/
   app.ts                  # builds the Express app (no listen); fixed middleware order
-  server.ts               # entrypoint: config → logger → app → start server → shutdown wiring
+  server.ts               # API entrypoint: config → logger → app → start server → shutdown wiring
+                          # (never starts the job scheduler)
+  bootstrap.ts            # shared start-up for API and worker: runtime guard, config, logger,
+                          # database client, container
+  worker.ts               # worker entrypoint (thin; calls runWorker)
+  workerRuntime.ts        # runWorker: JOBS_ENABLED gate, scheduler, heartbeat, shutdown (D-61)
+  jobs/                   # scheduler.ts (in-process interval scheduler) · registry.ts (job list)
+                          # · job implementations
   core/
     config/               # env.ts (Zod schema, pure loadConfig) · index.ts (.env loading)
     errors/               # canonical error codes → HTTP status · AppError
     health/               # readiness registry · /health routes
     lifecycle/            # startHttpServer (startup errors via 'error' event) · graceful shutdown
+                          # · workerLifecycle.ts (worker shutdown, 60 s hard exit)
     http/                 # response envelopes · pagination helpers
     logger/               # pino logger with redaction · AsyncLocalStorage request context
     middleware/           # requestId, accessLog, security, cors, rateLimit, bodyParsers,

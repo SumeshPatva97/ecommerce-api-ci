@@ -1,3 +1,5 @@
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
+
 import type { Express, Router } from 'express';
 
 import { createApp } from '../../src/app.js';
@@ -16,6 +18,23 @@ export const BASE_TEST_ENV: Readonly<Record<string, string>> = {
   CORS_ORIGINS: 'http://localhost:5173,http://localhost:5174',
   LOG_LEVEL: 'silent',
   DATABASE_URL: 'mysql://user:placeholder@localhost:3306/ecommerce_test',
+};
+
+/** Throw-away key material generated per test run — required by loadConfig outside development/test. */
+const testKeys = generateKeyPairSync('ed25519');
+export const PRODUCTION_SECRETS: Readonly<Record<string, string>> = {
+  // Private key as a single-line `\n`-escaped PEM, public key base64 — both accepted forms (§9.1).
+  JWT_ACCESS_PRIVATE_KEY: testKeys.privateKey
+    .export({ format: 'pem', type: 'pkcs8' })
+    .toString()
+    .split('\n')
+    .join('\\n'),
+  JWT_ACCESS_PUBLIC_KEY: Buffer.from(
+    testKeys.publicKey.export({ format: 'pem', type: 'spki' }).toString(),
+  ).toString('base64'),
+  JWT_KEY_ID: 'test-2026-11',
+  REFRESH_TOKEN_PEPPER: randomBytes(32).toString('hex'),
+  FIELD_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
 };
 
 export const STOREFRONT_ORIGIN = 'http://localhost:5173';

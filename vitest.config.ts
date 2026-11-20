@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // Fail fast with a clear message on Node < 22.13.0 (argon2 native crash otherwise).
+    globalSetup: ['tests/setup/nodeVersion.ts'],
     // Keep resource use low on 8 GB development machines.
     pool: 'forks',
     maxWorkers: 2,

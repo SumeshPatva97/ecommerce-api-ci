@@ -1,5 +1,7 @@
 /**
- * B0-c scaffold: email provider adapter. No production credentials/verification.
+ * Email provider adapter (OQ-08 vendor still open). Decision C2 (2026-11-19): local and test
+ * capture uses the in-process FAKE adapter — messages are recorded in memory (and logged without
+ * bodies or links) instead of being sent. No real email leaves development.
  */
 export interface SendEmailInput {
   readonly to: string;
@@ -21,11 +23,35 @@ export interface EmailProviderAdapter {
   send(input: SendEmailInput): Promise<SendEmailResult>;
 }
 
-export class MockEmailProviderAdapter implements EmailProviderAdapter {
-  readonly name = 'mock';
+export interface CapturedEmail extends SendEmailInput {
+  readonly messageId: string;
+  readonly capturedAt: Date;
+}
 
-  async send(_input: SendEmailInput): Promise<SendEmailResult> {
+/** Fake adapter with an inspectable outbox (bounded to the last 200 messages). */
+export class FakeEmailProviderAdapter implements EmailProviderAdapter {
+  readonly name = 'fake';
+  readonly outbox: CapturedEmail[] = [];
+  private counter = 0;
+
+  async send(input: SendEmailInput): Promise<SendEmailResult> {
     await Promise.resolve();
-    return { provider: this.name, messageId: `mock_email_${Date.now()}`, accepted: true };
+    this.counter += 1;
+    const messageId = `fake_email_${String(this.counter)}`;
+    this.outbox.push({ ...input, messageId, capturedAt: new Date() });
+    if (this.outbox.length > 200) this.outbox.shift();
+    return { provider: this.name, messageId, accepted: true };
+  }
+
+  /** Latest captured message for an address (tests / local dev tooling). */
+  latestFor(to: string): CapturedEmail | undefined {
+    for (let i = this.outbox.length - 1; i >= 0; i -= 1) {
+      const message = this.outbox[i];
+      if (message?.to === to) return message;
+    }
+    return undefined;
   }
 }
+
+/** @deprecated B0-c scaffold name kept for compatibility; use FakeEmailProviderAdapter. */
+export class MockEmailProviderAdapter extends FakeEmailProviderAdapter {}

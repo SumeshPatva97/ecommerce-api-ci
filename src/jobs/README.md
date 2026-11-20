@@ -1,23 +1,32 @@
-# Background Jobs — Architecture Scaffold (B0-c)
+# Background Jobs
 
-**Status:** scaffold only (no runtime job workers started, no Redis/BullMQ introduced).
+**Status:** scheduler (`scheduler.ts`, `registry.ts`) run by the **dedicated worker process** (`src/worker.ts`, D-61, Batch 9 — pending acceptance); **off by default** (`JOBS_ENABLED=false`) and **exactly one worker process** may run. The API process never runs jobs. Tested with a mocked DB only. Full coverage table and deviations: [`docs/PHASE4-JOBS-AND-SCHEDULING.md`](../../docs/PHASE4-JOBS-AND-SCHEDULING.md).
 
 ## Decisions/constraints
 
-- Redis/BullMQ deferred unless explicitly approved (PROJECT_CONTEXT D-38 / OQ-35). Do not add heavy infrastructure without documented justification and approval.
-- Job handlers must be **idempotent**, observable (structured logs/correlation IDs), and safe to retry.
-- Sensitive payloads must follow logging redaction policy.
+- Redis/BullMQ deferred unless explicitly approved (PROJECT_CONTEXT D-38 / OQ-35). Until then there is no distributed lock, so never enable jobs on more than one process.
+- Job handlers must be **idempotent**, observable (structured logs), and safe to retry.
+- Sensitive payloads must follow the logging redaction policy.
 
-## Planned job categories (per approved docs, to implement when scheduled)
+## Files
 
-- Notification dispatch (email/WhatsApp/in-app) via provider adapters
-- Payment/webhook reconciliation and retry-safe post-processing (with strict idempotency)
-- Inventory reservation expiry/cleanup (if approved)
-- Report/export generation (async, authorized)
-- Maintenance/cleanup tasks (tokens, idempotency keys, temp artifacts) per retention policy
+| File                        | Job                                                           | Scheduled?                                    |
+| --------------------------- | ------------------------------------------------------------- | --------------------------------------------- |
+| `reservationExpiry.ts`      | `reservation-expiry` (1 min)                                  | yes                                           |
+| `unpaidOrderCancel.ts`      | `unpaid-order-cancel` (5 min)                                 | yes                                           |
+| `notificationDispatcher.ts` | `notification-dispatch` (15 s; covers `notification-retries`) | yes                                           |
+| `paymentReconciliation.ts`  | `payment-reconciliation` (15 min)                             | yes                                           |
+| `shipmentTrackingPoll.ts`   | `shipment-tracking-poll` (30 min; polling couriers only)      | yes                                           |
+| `promotionActivation.ts`    | `promotion-activation` (1 min)                                | yes                                           |
+| `catalogAggregates.ts`      | `best-seller-refresh`, `rating-aggregate` (24 h)              | yes                                           |
+| `abandonedCarts.ts`         | `abandoned-carts` (1 h; RD-08 option B)                       | yes                                           |
+| `tokenCleanup.ts`           | `token-cleanup` (24 h; 7-day verification grace PROPOSED)     | yes                                           |
+| `reportExport.ts`           | `report-exports` worker                                       | no: needs a durable queue and private storage |
+| `scheduler.ts`              | scheduler (overlap protection, stop signal for long jobs)     | n/a                                           |
+| `registry.ts`               | job list started by the worker (`src/workerRuntime.ts`)       | n/a                                           |
 
-## Implementation notes (future)
+## Adding a job
 
-- Introduce a `JobRunner` interface with in-process/dev stub and an approved durable queue adapter when required.
-- Register jobs with explicit names, schemas, retry/backoff policy, and dead-letter handling.
-- Wire health/metrics and operational runbooks before production use.
+Add a `run*` function that takes explicit dependencies and returns a summary object, register it in `registry.ts` with a unique name and an interval of at least 1 s, and add a mocked-DB unit test that covers a re-run (idempotency) and a per-item failure.
+
+Not implemented by decision: `low-stock-digest` (RD-09 = instant only). Start the worker with `npm run dev:worker` / `npm run start:worker` (with `JOBS_ENABLED=true` for the worker only); stop the old worker before starting a replacement. Multi-server / distributed scheduling is deferred (D-61).

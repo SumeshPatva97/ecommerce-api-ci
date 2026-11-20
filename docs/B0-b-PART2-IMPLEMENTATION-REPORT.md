@@ -8,6 +8,8 @@
 | DB connection (live MySQL)         | **Failed — app authentication/access denied (redacted, current probe)**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Migrations/SQL/seeds applied to DB | **None**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
+> **Status superseded (2026-11-17/18).** The blocker recorded above was resolved later in this same report: see "Increment A status and remaining blockers" — **Increment A: PASS** after the app-user authentication issue was fixed by the user. For Increment B, the reviewed baseline candidate reached **G6 PASS — ACCEPTED** (2026-11-17); **G2/G3 are NOT STARTED** (2026-11-18). The table above is preserved as the state at the time of writing.
+
 ## 1. Windows inspection (completed)
 
 | Item                                                      | Result                                                                                                                                                                                 |
@@ -365,4 +367,4 @@
 - No Phase 5/frontend started.
 - No `prisma db push`, no unreviewed SQL applied, no migrations executed, no production DB connection.
 - No real credentials committed/printed; `.env` remains git-ignored (placeholder-only `.env.example`).
-- No git init/commit/push/branch changes/destructive git operations. No code pushed.
+- No git init/commit/push/branch changes/destructive git operations. No code pushed. _(Superseded 2026-11-18: the repository was published to `https://github.com/SumeshPatva97/ecommerce-api-ci`, branch `main`, commit `baa5620`; no Git operation was performed in the 2026-11-18 update.)_

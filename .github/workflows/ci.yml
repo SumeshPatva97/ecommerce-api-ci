@@ -16,9 +16,6 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ecommerce-api
     env:
       # Placeholder only for offline Prisma validation in CI (no DB connection).
       DATABASE_URL: mysql://user:placeholder@localhost:3306/ecommerce_ci
@@ -37,15 +34,20 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version-file: ecommerce-api/.nvmrc
+          node-version-file: .nvmrc
           cache: npm
-          cache-dependency-path: ecommerce-api/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install
         run: npm ci
 
       - name: Prisma validate (offline)
         run: npx prisma validate
+
+      # src/generated/ is git-ignored, so the client must be generated before typecheck/build/test.
+      # Offline: no database connection is made.
+      - name: Prisma generate (offline)
+        run: npx prisma generate
 
       - name: Format check
         run: npm run format:check
@@ -58,6 +60,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: OpenAPI drift check
+        run: npm run openapi:check
 
       - name: Test
         run: npm test

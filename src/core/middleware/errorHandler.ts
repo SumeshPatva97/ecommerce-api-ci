@@ -2,6 +2,7 @@ import type { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
 
 import { AppError } from '../errors/AppError.js';
+import { mapPrismaError } from '../errors/prismaErrorMapper.js';
 import { buildErrorEnvelope } from '../http/envelope.js';
 import type { Logger } from '../logger/logger.js';
 import { zodIssuesToDetails } from './validate.js';
@@ -40,7 +41,8 @@ export function toAppError(error: unknown): AppError {
         break;
     }
   }
-  // Prisma error mapping (P2002/P2003/P2025/P2034) is added with the database increment.
+  const prismaMapped = mapPrismaError(error);
+  if (prismaMapped !== undefined) return prismaMapped;
   return new AppError('INTERNAL_ERROR', undefined, { cause: error });
 }
 

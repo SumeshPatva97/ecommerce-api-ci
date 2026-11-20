@@ -3,7 +3,13 @@ import { resolve } from 'node:path';
 
 import { loadConfig, type AppConfig } from './env.js';
 
-export { ConfigError, loadConfig, type AppConfig } from './env.js';
+export {
+  ConfigError,
+  loadConfig,
+  type AppConfig,
+  type AuthConfig,
+  type IntegrationsConfig,
+} from './env.js';
 
 /**
  * Reads `.env` (local development only — real deployments inject variables through the

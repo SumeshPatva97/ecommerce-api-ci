@@ -1,26 +1,27 @@
+/**
+ * API process entrypoint (HTTP only).
+ *
+ * D-61 / Batch 9: scheduled background jobs run ONLY in the dedicated worker process
+ * (`src/worker.ts`, `npm run start:worker`). The API never creates or starts the job scheduler; a
+ * `JOBS_ENABLED=true` seen here is ignored with a warning (`warnIfJobsEnabledForApi`).
+ */
 import { createApp } from './app.js';
-import { ConfigError, loadConfigFromProcess, type AppConfig } from './core/config/index.js';
-import { createDatabase } from './core/db/prisma.js';
+import {
+  assertRuntimeOrExit,
+  connectDatabaseOrContinue,
+  createProcessRuntime,
+  loadConfigOrExit,
+  warnIfJobsEnabledForApi,
+} from './bootstrap.js';
 import { Readiness } from './core/health/readiness.js';
 import { registerGracefulShutdown, startHttpServer } from './core/lifecycle/httpServer.js';
-import { createLogger } from './core/logger/logger.js';
-
-function loadConfigOrExit(): AppConfig {
-  try {
-    return loadConfigFromProcess();
-  } catch (error) {
-    // Logger is not available yet: write a plain message (variable names only, never values).
-    const message = error instanceof ConfigError ? error.message : 'Failed to load configuration.';
-    process.stderr.write(`${message}\n`);
-    process.exit(1);
-  }
-}
 
 async function main(): Promise<void> {
+  assertRuntimeOrExit();
   const config = loadConfigOrExit();
-  const logger = createLogger(config);
+  const runtime = createProcessRuntime(config, 'api');
+  const { logger, database, container } = runtime;
   const readiness = new Readiness();
-  const database = createDatabase(config, logger);
 
   // Readiness reports database availability accurately once B0-b Part 2 DB is configured.
   // In environments without a reachable MySQL instance, this check will fail (by design).
@@ -28,17 +29,9 @@ async function main(): Promise<void> {
     await database.ping();
   });
 
-  const app = createApp({ config, logger, readiness });
-
-  try {
-    await database.connect();
-  } catch (error) {
-    // Do not claim DB-backed functionality complete until MySQL is installed/configured and verified.
-    logger.error(
-      { err: error },
-      'database connection failed during startup (continuing to serve; readiness will reflect DB state)',
-    );
-  }
+  const app = createApp({ config, logger, readiness, container });
+  await connectDatabaseOrContinue(runtime);
+  warnIfJobsEnabledForApi(config, logger);
 
   try {
     const server = await startHttpServer(app, config.port, logger);

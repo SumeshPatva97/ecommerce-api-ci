@@ -31,8 +31,15 @@ export function zodIssuesToDetails(issues: readonly z.core.$ZodIssue[]): ErrorDe
  * Whether unknown keys are rejected is decided by each schema (`z.strictObject` / `.strict()`);
  * SECURITY_GUIDELINES.md §5 asks for strict schemas on security-sensitive and admin bodies.
  */
+/** Marker read by the OpenAPI generator (`scripts/generate-openapi.ts`). */
+export const VALIDATION_SCHEMAS = Symbol.for('ecommerce.validationSchemas');
+
 export function validate(schemas: ValidationSchemas): RequestHandler {
-  return (req, _res, next) => {
+  const handler: RequestHandler & { [VALIDATION_SCHEMAS]?: ValidationSchemas } = (
+    req,
+    _res,
+    next,
+  ) => {
     const details: ErrorDetail[] = [];
     const validated: NonNullable<Request['validated']> = {};
 
@@ -53,6 +60,8 @@ export function validate(schemas: ValidationSchemas): RequestHandler {
     if (validated.body !== undefined) req.body = validated.body;
     next();
   };
+  handler[VALIDATION_SCHEMAS] = schemas;
+  return handler;
 }
 
 /** Typed accessor for validated input in controllers (no re-parse). */
