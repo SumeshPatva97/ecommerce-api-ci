@@ -44,7 +44,10 @@ async function upsertSetting(
   });
 }
 
-export async function seedReference(db: PrismaClient, options: ReferenceOptions = {}): Promise<void> {
+export async function seedReference(
+  db: PrismaClient,
+  options: ReferenceOptions = {},
+): Promise<void> {
   await db.$transaction((tx) => seedStates(tx), { timeout: 60_000 });
   await db.$transaction((tx) => seedSettings(tx), { timeout: 60_000 });
   await db.$transaction((tx) => seedNotificationTemplates(tx), { timeout: 60_000 });
@@ -179,6 +182,35 @@ export async function seedCoupon(
     },
   });
   return { id, code };
+}
+
+export interface AccountFixture {
+  readonly userId: string;
+  readonly email: string;
+}
+
+/** `count` ACTIVE, email-verified customers WITHOUT address or cart (auth-only scenarios). */
+export async function seedAccounts(db: PrismaClient, count: number): Promise<AccountFixture[]> {
+  const run = randomUUID().slice(0, 8);
+  const verifiedAt = new Date(Date.now() - DAY_MS);
+  const accounts: AccountFixture[] = Array.from({ length: count }, (_unused, index) => ({
+    userId: randomUUID(),
+    email: `dbtest-auth-${run}-${String(index)}@example.test`,
+  }));
+  await db.user.createMany({
+    data: accounts.map((a, index) => ({
+      id: a.userId,
+      accountType: 'CUSTOMER' as const,
+      email: a.email,
+      emailNormalized: a.email,
+      firstName: 'Dbtest',
+      lastName: `Account${String(index)}`,
+      status: 'ACTIVE' as const,
+      emailVerifiedAt: verifiedAt,
+      lastLoginAt: verifiedAt,
+    })),
+  });
+  return accounts;
 }
 
 export interface CustomerFixture {

@@ -1,13 +1,15 @@
 # Phase 4 — Autonomous Completion Status (live tracker)
 
-| Field        | Value                                                                                                       |
-| ------------ | ----------------------------------------------------------------------------------------------------------- |
-| Document     | P4-STATUS-LIVE                                                                                              |
-| Last updated | 2026-11-20 (session 1 of the autonomous completion agent)                                                   |
-| Task IDs     | From `PHASE4-MASTER-COMPLETION-ROADMAP.md` (the source of truth). This file records **current** status only |
-| Agent        | `PHASE4-AUTONOMOUS-COMPLETION-AGENT.md` (instruction document; no persistent agent exists)                  |
+| Field        | Value                                                                                                                                                           |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Document     | P4-STATUS-LIVE                                                                                                                                                  |
+| Last updated | 2026-11-27. The highest-numbered section is the current status; §1–§9 are the 2026-11-20 record (first written in session 1 of the autonomous completion agent) |
+| Task IDs     | From `PHASE4-MASTER-COMPLETION-ROADMAP.md` (the source of truth). This file records **current** status only                                                     |
+| Agent        | `PHASE4-AUTONOMOUS-COMPLETION-AGENT.md` (instruction document; no persistent agent exists)                                                                      |
 
 ## 1. Overall status (unchanged by this session)
+
+_(Note 2026-11-24: this table is the 2026-11-20 position and is kept as written. Batch 9 and Batch 10 were accepted on 2026-11-24 for offline mocked scope only (§12). Later sections supersede the rows here and in §3 where they differ.)_
 
 | Item                 | Status                                                                                     | Evidence                                           |
 | -------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------- |
@@ -27,15 +29,15 @@
 
 ## 2. Completed in this session (2026-11-20)
 
-| Task                                                                  | Result                                                                                                                                                                                                                                                                 | Evidence                                                                  |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Inventory and path verification                                       | Roadmap, master report and decisions verified. `IMPLEMENTATION_ROADMAP.md` lives in `project-documentation/10-project-management/` (not `ecommerce-api/docs/`)                                                                                                         | This file                                                                 |
-| Fifth M-1 path verified                                               | Admin retry of a `FAILED` gateway refund: `prepareGatewayRefund` inside the transaction (`refunds.service.ts` `retry`), `runGateway(job)` after commit. Same commit-then-call risk. Bank-transfer retry makes no gateway call (not affected)                           | Code; `PHASE4-BATCH9-PRE-ACCEPTANCE-FINAL-DOCUMENTATION-FIX-REPORT.md` §3 |
-| Five-path documentation reconciliation (current-state documents only) | Updated with dated notes: runbook §9 (five code paths), master report §16 (four API code paths incl. retry), ADMIN_WORKFLOWS §11.1 note (retry transaction). Already correct: API_DOCUMENTATION retry row, JOBS §6a. Historical reports left unchanged (dated records) | §7 below                                                                  |
-| B10-REV                                                               | Batch 10 technical review and proposal: IMP-01 … IMP-06 verified in code, IMP-07 needs DEC-06; 6 work packages; no DB / API-behaviour change                                                                                                                           | `PHASE4-BATCH10-TECHNICAL-REVIEW-AND-PROPOSAL.md`                         |
-| Agent definition                                                      | Instruction document (no persistent agent)                                                                                                                                                                                                                             | `PHASE4-AUTONOMOUS-COMPLETION-AGENT.md`                                   |
-| QA-02 (draft)                                                         | FR "Must" API traceability matrix: see §5 (draft, pending verification)                                                                                                                                                                                                | `PHASE4-FR-MUST-API-TRACEABILITY-MATRIX-DRAFT.md`                         |
-| Read-only gates                                                       | `format:check`, `lint`, `typecheck`, `openapi:check` PASS earlier today (22:46) on unchanged code (no source change since 20:57)                                                                                                                                       | `PHASE4-BATCH9-UPDATED-FINAL-ACCEPTANCE-REVIEW.md` §4                     |
+| Task                                                                  | Result                                                                                                                                                                                                                                                                                                                                                                 | Evidence                                                                  |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Inventory and path verification                                       | Roadmap, master report and decisions verified. `IMPLEMENTATION_ROADMAP.md` lives in `project-documentation/10-project-management/` (not `ecommerce-api/docs/`). _(Note 2026-11-24: this is the canonical location. From 2026-11-21 until 2026-11-24 the file sat in `02-architecture/`; it was moved back on the owner's authorization and its content is unchanged.)_ | This file                                                                 |
+| Fifth M-1 path verified                                               | Admin retry of a `FAILED` gateway refund: `prepareGatewayRefund` inside the transaction (`refunds.service.ts` `retry`), `runGateway(job)` after commit. Same commit-then-call risk. Bank-transfer retry makes no gateway call (not affected)                                                                                                                           | Code; `PHASE4-BATCH9-PRE-ACCEPTANCE-FINAL-DOCUMENTATION-FIX-REPORT.md` §3 |
+| Five-path documentation reconciliation (current-state documents only) | Updated with dated notes: runbook §9 (five code paths), master report §16 (four API code paths incl. retry), ADMIN_WORKFLOWS §11.1 note (retry transaction). Already correct: API_DOCUMENTATION retry row, JOBS §6a. Historical reports left unchanged (dated records)                                                                                                 | §7 below                                                                  |
+| B10-REV                                                               | Batch 10 technical review and proposal: IMP-01 … IMP-06 verified in code, IMP-07 needs DEC-06; 6 work packages; no DB / API-behaviour change                                                                                                                                                                                                                           | `PHASE4-BATCH10-TECHNICAL-REVIEW-AND-PROPOSAL.md`                         |
+| Agent definition                                                      | Instruction document (no persistent agent)                                                                                                                                                                                                                                                                                                                             | `PHASE4-AUTONOMOUS-COMPLETION-AGENT.md`                                   |
+| QA-02 (draft)                                                         | FR "Must" API traceability matrix: see §5 (draft, pending verification)                                                                                                                                                                                                                                                                                                | `PHASE4-FR-MUST-API-TRACEABILITY-MATRIX-DRAFT.md`                         |
+| Read-only gates                                                       | `format:check`, `lint`, `typecheck`, `openapi:check` PASS earlier today (22:46) on unchanged code (no source change since 20:57)                                                                                                                                                                                                                                       | `PHASE4-BATCH9-UPDATED-FINAL-ACCEPTANCE-REVIEW.md` §4                     |
 
 ## 3. Task register (current status of roadmap IDs)
 
@@ -210,7 +212,7 @@ above). FR-AUTH-007, FR-NTF-005 and FR-RPT-011 were not re-checked; they cite kn
    - TC-014: no executed route × role matrix;
    - TC-033: barcode images not decoded back to the SKU;
    - TC-043: **no table-driven GST-01…17 suite**. Rules are tested with different numbers; GST-04
-     is absent; GST-17 deferred (B2B, OQ-24);
+     is absent; GST-17 deferred (B2B, OQ-24); _(Clarification 2026-11-27: "GST-17 deferred" is a historical statement and is kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
    - TC-047: no golden report dataset;
    - TC-054: state-machine check not exhaustive;
    - TC-060: not every notification event is rendered;
@@ -347,3 +349,255 @@ All open decisions are consolidated in `PHASE4-CONSOLIDATED-DECISION-PACKAGE.md`
 
 - deeper QA-02 sample verification;
 - ACC-01 package index once DEC-13 / DEC-14 are answered.
+
+## 10. Master completion run (2026-11-24) — supersedes earlier rows where they differ
+
+Full report: `PHASE4-MASTER-COMPLETION-AND-G4-READINESS-REPORT.md`. Module reports:
+`PHASE4-MASTER-AGENT1-…` to `PHASE4-MASTER-AGENT9-…`.
+
+### 10.1 Overall status (unchanged unless marked)
+
+| Item                  | Status on 2026-11-24                                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 / 2 / 3       | APPROVED — COMPLETE                                                                                                                 |
+| **Phase 4**           | **IN PROGRESS — NOT APPROVED**                                                                                                      |
+| Batch 7, Batch 8 + M1 | ACCEPTED — OFFLINE MOCKED SCOPE ONLY                                                                                                |
+| **Batch 9**           | **COMPLETE — PENDING USER ACCEPTANCE** _(accepted 2026-11-24 — §12)_                                                                |
+| **Batch 10**          | **Changed:** IMPLEMENTED AND VERIFIED (mocked) — PENDING USER ACCEPTANCE (was "NOT AUTHORIZED" in §1) _(accepted 2026-11-24 — §12)_ |
+| G2                    | USER EXECUTION IN PROGRESS — NOT ACCEPTED (Step 0 PASS; Step 1 not verified)                                                        |
+| G3                    | NOT ACCEPTED                                                                                                                        |
+| G7 / G8               | NOT AUTHORIZED                                                                                                                      |
+| **G4**                | **NOT MET**                                                                                                                         |
+| Production readiness  | NOT ESTABLISHED                                                                                                                     |
+
+### 10.2 Task register changes
+
+| ID                  | Status on 2026-11-24                                                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DF-01, DF-02, DF-03 | **FIXED** (2026-11-21), re-verified. §9.2 above lists them as open; that is superseded                                                                                                                             |
+| IMP-01 … IMP-06     | **COMPLETE** (Batch 10 WP10-1 … WP10-6), mocked evidence; Batch 10 awaits acceptance                                                                                                                               |
+| IMP-09              | **COMPLETE** (scheduler synchronous-throw fix and log wording), mutation-checked                                                                                                                                   |
+| IMP-07              | Rule decided (D-63). Implementation discrepancy open; the service guard is **not authorized** (DEC-06-impl)                                                                                                        |
+| IMP-08              | Manual procedure adopted (D-64, runbook §9.1). No automatic recovery; re-submission is a proposal only                                                                                                             |
+| M-2                 | **CLOSED by test** (`registryWiring.test.ts`), subject to Batch 10 acceptance                                                                                                                                      |
+| SEC-02              | Convention decided (D-62). No confirmed S1 / S2. Two items need the owner's classification: SEC-F02 (mock payment provider in production) and M-1. _(Update: SEC-F02 classified S2 and fixed on 2026-11-24 — §11)_ |
+| SEC-01              | Draft rebuilt: 142 controls (71 tested with mocks, 15 code-verified, 9 documented, 4 prepared, 14 blocked, 12 user-dependent, 17 gaps). Awaits owner review. _(After D1: 72 tested, 16 gaps — §11)_                |
+| DOC-09              | Runbook checked against the code; §9.1 extended; §10 records the `SENDING` limitation. No `SENDING` procedure exists                                                                                               |
+| QA-01               | Current: all gates pass (§10.3)                                                                                                                                                                                    |
+| QA-02               | Re-counted: 219 tested, 7 no test, 11 partial, 2 blocked / deferred (of 239)                                                                                                                                       |
+| QA-03               | TC-060 now covered. Six concurrency cases prepared for a real database, not executed                                                                                                                               |
+| DEC-12 harness      | **PREPARED, NOT EXECUTED**: `tests/db/` (guard, six scenarios, separate configuration, owner procedure)                                                                                                            |
+| DEC-13              | Four small items implemented (D-66): FR-ORD-006, FR-INV-006, FR-SF-004 complete; **FR-AD-008 partial**. FR-PRM-004, FR-PL-013, FR-TAX-013 and all deferral approvals remain open                                   |
+| ACC-01              | The master completion report §14 is the G4 evidence index. It is not an approval                                                                                                                                   |
+
+### 10.3 Gates executed on the integrated tree (2026-11-24, Node 24.12.0, local, not CI)
+
+| Gate                        | Result                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `npm run format:check`      | PASS                                                                            |
+| `npm run lint`              | PASS                                                                            |
+| `npm run typecheck`         | PASS                                                                            |
+| `npm run build`             | PASS                                                                            |
+| `npm run openapi:check`     | PASS (248 operations)                                                           |
+| `npx vitest run --coverage` | PASS: 119 files, 3,110 passed, 3 todo, 0 failed _(before D1; after D1 see §11)_ |
+| Coverage                    | Statements 92.08 %, branches 82.63 %, functions 94.70 %, lines 93.81 %          |
+
+All test evidence is mocked. It is not MySQL, provider, CI or production evidence.
+
+### 10.4 Open findings added in this run
+
+- **SEC-F02** _(RESOLVED 2026-11-24 — §11; the text is the finding as reported)_**:** the mock payment provider is not refused at start-up in production; the customer
+  `verify` path accepts the mock's public secret. Latent (no production deployment). Fix not
+  authorized. Severity to be classified by the owner.
+- **DB-P1 (predicted, not reproduced):** coupon over-redemption under real concurrency. Needs
+  DEC-12 (scenario TC-041).
+- **FR-AD-008 leftovers**, **DC-05** (barcode content type in OpenAPI), **DC-06** (FR-PAY-011
+  permission wording), and the owner decisions OD-02 … OD-10: see
+  `PHASE4-REMAINING-USER-DECISIONS.md` §6.
+
+### 10.5 G4 criteria — position on 2026-11-24
+
+| #   | Criterion                                      | Position                                                                                                                                            |
+| --- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Endpoints implemented or formally deferred     | NOT MET: the e-mail / WhatsApp webhooks need an approved deferral (DEC-13a)                                                                         |
+| 2   | Must API-side criteria pass in automated tests | NOT MET: 11 partial requirements need implementation or approved deferral; six concurrency cases need a real database (DEC-12)                      |
+| 3   | No open P0 / P1 defects                        | NOT CONFIRMED: no confirmed S1 / S2, but SEC-F02 and M-1 need the owner's classification, and DB-P1 is untested. _(Update: SEC-F02 resolved — §11)_ |
+| 4   | Security self-assessment complete              | DRAFT COMPLETE, NOT ACCEPTED: owner review pending; 17 gaps listed _(16 after D1 — §11)_                                                            |
+| 5   | Client written approval                        | NOT STARTED (user / client only)                                                                                                                    |
+
+### 10.6 Next actions
+
+Only user decisions and user-executed steps remain; see the master completion report §16 and
+`PHASE4-REMAINING-USER-DECISIONS.md`. No further implementation is authorized.
+
+## 11. D1 implemented (2026-11-24) — supersedes §10 where they differ
+
+**Decision (owner, D1 only):** "I classify PW-08 / A9-F02 as S2 and authorize the fix in the security plan §1.5 Option B with the tests in §1.6."
+
+| Item                                                                     | Status after D1                                                                                                                                                             |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mock payment provider in production (PW-08 / A9-F02; "SEC-F02" in §10.4) | **RESOLVED**: classified S2; fixed; tested with mocks; mutation-checked                                                                                                     |
+| Source changed                                                           | `src/container.ts`, `src/bootstrap.ts`, `src/modules/payments/payments.service.ts`; comment in `src/integrations/payments/paymentProvider.ts`                               |
+| Tests                                                                    | 14 cases added in `tests/unit/core/container.test.ts`, `tests/integration/modules/payments/payments.routes.test.ts`, `tests/unit/bootstrap.test.ts` (new)                   |
+| Gates (local, Node 24.12.0)                                              | `format:check`, `lint`, `typecheck`, `build`, `openapi:check` PASS                                                                                                          |
+| Full suite                                                               | 120 files, 3,124 passed, 3 todo, 0 failed (before D1: 119 files, 3,110 passed)                                                                                              |
+| Coverage                                                                 | Statements 92.11 %, branches 82.69 %, functions 94.74 %, lines 93.86 %                                                                                                      |
+| SEC-01 (self-assessment draft)                                           | PW-08 reassessed GAP → TESTED. Totals: TESTED 72, CODE-VERIFIED 15, DOCUMENTED 9, PREPARED 4, BLOCKED 14, USER-DEPENDENT 12, GAP 16 (142). Still a draft awaiting the owner |
+| SEC-02 (defect register)                                                 | No confirmed S1 / S2 open. M-1 still awaits classification; the coupon-concurrency prediction is untested                                                                   |
+
+**Decision register (`PHASE4-FINAL-OWNER-DECISION-PACKAGE.md`):** D1 RESOLVED. D2 – D17 OPEN. Batch 9
+and Batch 10 PENDING USER ACCEPTANCE. No deferral approved. _(Update: Batch 9 and Batch 10 accepted on 2026-11-24 — §12; D6 and D7 resolved and DEF-A1 approved — §13.)_
+
+**G4 criteria after D1:** 1 not met · 2 not met · 3 not confirmed (M-1 unclassified, coupon case
+untested) · 4 draft not accepted · 5 not started.
+
+**Outstanding for this fix:** a CI run on Node 22; verification with a real process under a
+production configuration; a real payment provider (Phase 7).
+
+**Phase 4: IN PROGRESS — NOT APPROVED. G4: NOT MET.** Reconciliation record:
+`PHASE4-D1-POST-IMPLEMENTATION-DOCUMENTATION-RECONCILIATION-REPORT.md`.
+
+## 12. Batch 9 and Batch 10 accepted (2026-11-24) — supersedes §1, §3, §4, §10 and §11 where they differ
+
+| Item                                                | Status after the owner's decision                                                     |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Batch 9** (dedicated worker, D-61)                | **ACCEPTED — OFFLINE MOCKED SCOPE ONLY** (owner, 2026-11-24)                          |
+| **Batch 10** (WP10-1 … WP10-6, scheduler fix, D-65) | **ACCEPTED — OFFLINE MOCKED SCOPE ONLY** (owner, 2026-11-24)                          |
+| ACC-02 (Batch 9 acceptance)                         | **DONE**                                                                              |
+| Batch 10 acceptance                                 | **DONE**                                                                              |
+| Decision package                                    | D1, D12, D13 RESOLVED. D2 – D11 and D14 – D17 OPEN _(D6 and D7 resolved later — §13)_ |
+| Deferrals                                           | None approved _(when written; DEF-A1 approved later — §13)_                           |
+| M-1 severity                                        | Not classified                                                                        |
+| **Phase 4**                                         | **IN PROGRESS — NOT APPROVED**                                                        |
+| **G4**                                              | **NOT MET**                                                                           |
+| Production readiness                                | NOT ESTABLISHED                                                                       |
+
+**Acknowledged with Batch 9 (ten risks):** RK-01, RK-02, RK-03, RK-04 (five code paths), RK-05,
+RK-06, RK-08, RK-09, RK-10, RK-13. **Noted:** RK-07 and RK-14 corrected through Batch 10; RK-11 and
+RK-12 deferred items; RK-15 open business decision; L-2 and L-3 open audit low findings.
+
+**Acknowledged with Batch 10 (six limitations):** mocked evidence only; WP10-1 wiring proven with
+mocked job modules; WP10-2 errors counted but nothing alerts; WP10-3 failed refund not counted and
+a recording failure leaves the refund `PROCESSING`; WP10-4 barcode image documented as JSON (DC-05);
+WP10-5 default of 90 days until the settings seed runs.
+
+**Exact wording** of both acceptances and of every acknowledged risk and limitation:
+`PHASE3-PHASE4-MASTER-PROGRESS-REPORT.md` §18.
+
+**Still open after the acceptances.** Every acknowledged risk and limitation stays open until it is
+fixed, verified or formally deferred. Neither acceptance covers MySQL behaviour, real operating-system signals, two worker processes,
+real providers, CI, deployment, multi-server operation or production readiness. Neither approves a
+deferral, classifies M-1, meets G4 or approves Phase 4.
+
+**G4 criteria:** 1 not met · 2 not met · 3 not confirmed · 4 draft not accepted · 5 not started.
+
+**Next owner decisions:** D2 – D11 and D14 – D17 of `PHASE4-FINAL-OWNER-DECISION-PACKAGE.md` _(D6 and D7 were decided later — §13; open now: D2 – D5, D8 – D11, D14 – D17)_; then
+the owner-executed steps in `PHASE4-OWNER-EXECUTION-RUNBOOK.md`.
+
+## 13. D6 and D7 approved (2026-11-24) — supersedes §12 where they differ
+
+| Item                              | Status                                                                                                          |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| D6 — e-mail and WhatsApp webhooks | **RESOLVED**: formal deferral DEF-A1 approved to Phase 7 (three operations, dependent behaviour, one condition) |
+| D7 — `GET /api/v1/openapi.json`   | **RESOLVED**: formal deferral of HTTP serving approved                                                          |
+| IMP-11 (roadmap)                  | Formally deferred to Phase 7 under D6 (was BLOCKED)                                                             |
+| Decision package                  | D1, D6, D7, D12, D13 RESOLVED. D2 – D5, D8 – D11, D14 – D17 OPEN                                                |
+| Proposed deferrals                | DEF-A1 approved. DEF-A2 … DEF-A5, DEF-B1 … DEF-B3 not approved                                                  |
+| **Phase 4**                       | **IN PROGRESS — NOT APPROVED**                                                                                  |
+| **G4**                            | **NOT MET**                                                                                                     |
+
+**G4 criteria:** 1 no known gap at method-and-path level (not independently verified) · 2 not met ·
+3 not confirmed · 4 draft not accepted · 5 not started.
+
+**Not verified:** publishing of the OpenAPI specification as a release artefact.
+
+Exact wording: `PHASE4-REMAINING-USER-DECISIONS.md` §3.1.
+
+## 14. Autonomous execution run (2026-11-24, later the same day) — supersedes §13 where they differ
+
+Authorization: the owner's master prompt for autonomous execution (bug fixes, tests and documentation inside the approved scope). No owner decision was taken, no deferral approved, no database, Git, external service or `.env*` file used. Full record: `PHASE3-PHASE4-MASTER-PROGRESS-REPORT.md` §20.
+
+| Item                                               | Status                                                                                                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Full suite (Node 24.12.0, mocked database, not CI) | 126 files, 3,237 passed, 2 todo, 0 failed (before the run: 120 files, 3,124 passed, 3 todo)                                                |
+| Coverage                                           | statements 92.77 %, branches 84.07 %, functions 95.80 %, lines 94.32 %                                                                     |
+| Other gates                                        | `format:check`, `lint`, `typecheck`, `build`, `openapi:check` pass                                                                         |
+| Defect fixed                                       | CA1-09: public ETag changed on every response; fixed with a regression test (proposed S4)                                                  |
+| Contract audit (criterion 1)                       | 248 of 248 documented operations have a route; 0 undocumented routes; 57 differences recorded (`PHASE4-API-CONTRACT-CONFORMANCE-AUDIT.md`) |
+| QA-02 traceability                                 | Tested 226, no test found 0, partial 11, blocked / deferred 2                                                                              |
+| SEC-01 (self-assessment draft)                     | TESTED 74, CODE-VERIFIED 13, DOCUMENTED 9, PREPARED 6, BLOCKED 14, USER-DEPENDENT 12, GAP 14 (142). Still a draft awaiting the owner       |
+| CI workflow                                        | Test step now runs with coverage floors; build-artefact step added. Never run                                                              |
+| Container build context                            | `.dockerignore` added. Never built                                                                                                         |
+| Decision package                                   | Unchanged: D1, D6, D7, D12, D13 RESOLVED. D2 – D5, D8 – D11, D14 – D17 OPEN                                                                |
+| Proposed deferrals                                 | Unchanged: DEF-A1 approved. DEF-A2 … DEF-A5, DEF-B1 … DEF-B3 not approved                                                                  |
+| DOC-12                                             | Unchanged: OPEN (owner said it will be handled separately)                                                                                 |
+| **Phase 4**                                        | **IN PROGRESS — NOT APPROVED**                                                                                                             |
+| **G4**                                             | **NOT MET**                                                                                                                                |
+
+_(Clarification 2026-11-27, row "CI workflow": the words "Never run" were not verified. No CI run evidence is recorded in the reviewed project documentation. Whether a CI run exists was not checked, because no Git or GitHub access was used. The row is kept as written.)_
+
+_(Clarification 2026-11-27, row "Contract audit (criterion 1)": 248 is the number of specification operations, all with routes. Route presence is not contract conformance; 32 contract rows are open. See the contract audit §1 (`PHASE4-API-CONTRACT-CONFORMANCE-AUDIT.md`). The row is kept as written.)_
+
+_(Clarification 2026-11-27, row "SEC-01 (self-assessment draft)": "GAP 14" is a draft count, not accepted (D11). It includes two reassessments not approved by the owner (SH-10 and CS-03, from GAP to PREPARED); without them the count is 16. The row is kept as written.)_
+
+**G4 criteria:** 1 presence confirmed twice, shape differences open, not marked met · 2 not met ·
+3 not confirmed · 4 draft not accepted · 5 not started.
+
+**New items awaiting the owner:** 32 contract rows and seven findings from the test work
+(`PHASE4-API-CONTRACT-CONFORMANCE-AUDIT.md` §4 and §6.1), and two schema / design-document
+differences (§6 of the same document). Summary: `PHASE4-REMAINING-USER-DECISIONS.md` §9.
+
+**No further independently executable task was found.** Everything left needs an owner decision,
+the database gates (G2 → G3 → readiness decision → G7 → G8), an external service, a CI run by the
+owner, or client approval.
+
+**Clarification 2026-11-27 (independent read-only audit).** The sentence "No further independently executable task was found" is the 2026-11-24 position and is kept as written. It is no longer accurate without qualification. The audit of 2026-11-27 identified these candidate technical tasks:
+
+- cache headers on error responses from publicly cacheable routes;
+- wider ETag test coverage;
+- documenting the 304 response in the OpenAPI specification;
+- documentation accuracy corrections;
+- a clearer classification of static-evidence rows in the traceability matrix.
+
+These are candidates only. None of them is authorized, approved, started or completed by this note. The audit identified them by reading code and documents; it executed nothing and verified none of them with a runtime test. Each needs the owner's separate authorization. One part of the fourth item was authorized separately on 2026-11-27: four documentation accuracy findings, of which this note is one.
+
+## 15. DEC-12 decided (2026-11-27) — supersedes §14 where they differ
+
+Record of the owner's decision received on 2026-11-27. Decision ID: DEC-12. Reply label in the owner decision package: D10. Full record: `PHASE4-FINAL-OWNER-DECISION-PACKAGE.md`, D10. §14 and the earlier sections are kept as written; each is the record of its own date.
+
+**Decided.**
+
+- **DEC-12: DECIDED — REAL MYSQL VERIFICATION REQUIRED FOR G4.** Real MySQL verification of all six prepared concurrency scenarios is mandatory for G4: TC-004, TC-030, TC-041, TC-045, TC-048 and TC-051. They must pass against the designated `ecommerce_test` database and produce reviewable evidence before G4 acceptance.
+- Failures must be investigated, classified and resolved through separately authorized work.
+- D10 / DEC-12 is therefore decided, not OPEN. The words "D2 – D5, D8 – D11, D14 – D17 OPEN" in the §14 table are the 2026-11-24 position. D8, D9 and D11 are still open; under D10 only the coupon-hardening question remains.
+
+**Not authorized by DEC-12.**
+
+- **Execution of the six scenarios.** G7 PASS is a prerequisite before scenario execution. G7 PASS alone does not authorize scenario execution. A separate explicit written authorization from the owner is required before execution.
+- **Any database operation.** DEC-12 is a G4 evidence requirement only. It does not authorize G2 backup or restore, G3 migrator-user or privilege operations, the G7 scratch-database migration, the G8 migration against `ecommerce_dev`, seeds, staging, or any unrelated database user, grant, schema or data change. Only the owner executes user-only database procedures.
+- **Coupon hardening.** NOT AUTHORIZED. The TC-041 evidence must be reviewed before any separate coupon-hardening decision.
+
+**Separate from DEC-12.**
+
+- **GST-15** is excluded from DEC-12 and requires a separate owner decision. It is not approved, deferred, implemented or verified.
+- **Batch 12** (the proposed MySQL suite of the roadmap) is not addressed by the decision and is not part of the six scenarios. It stays open pending separate owner clarification.
+- **Iteration count** is not decided. Neither the harness default of 3 nor the testing-strategy values of 5 and 20 is selected. A separate decision is needed before scenario execution.
+
+**Traceability (clarification 2026-11-27).** TC-041 is the real-database evidence scenario for requirement FR-CPN-008 and its acceptance criterion AC-03. TC-041 remains PREPARED — NOT EXECUTED, and no real-MySQL evidence exists yet. TC-041 provides evidence; it does not make owner decisions. Coupon hardening remains NOT AUTHORIZED pending review of the TC-041 evidence and a separate owner decision.
+
+**Status on 2026-11-27.**
+
+- Phase 4: IN PROGRESS — NOT APPROVED
+- G4: NOT MET
+- G2: USER EXECUTION IN PROGRESS — NOT ACCEPTED (existing authorization and status unchanged; independent of DEC-12)
+- G3: NOT ACCEPTED
+- G7: NOT AUTHORIZED
+- G8: NOT AUTHORIZED
+- Six real MySQL concurrency scenarios: PREPARED — NOT EXECUTED
+- Decision package: D1, D6, D7, D12 and D13 resolved; DEC-12 (reply label D10) decided; D2 – D5, D8, D9, D11 and D14 – D17 open
+- Proposed deferrals: unchanged — DEF-A1 approved; DEF-A2 … DEF-A5 and DEF-B1 … DEF-B3 not approved
+- Production readiness: NOT ESTABLISHED
+
+**G4 criteria:** 1 not marked met · 2 not met (the six scenarios are now required evidence and are outstanding) · 3 not confirmed · 4 draft not accepted · 5 not started.
+
+Everything else in §14, including its clarifications of 2026-11-27, is unchanged. No scenario has been executed and no criterion is satisfied by this record.

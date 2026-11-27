@@ -3,7 +3,7 @@
 -- NOT EXECUTED — requires explicit owner authorization (DEC-12).
 --
 -- Run by the owner (step 3 of tests/db/README.md) with the TEST user, before any test:
---   mysql --defaults-extra-file=<git-ignored option file> ecommerce_test < tests/db/sql/setup.sql
+--   mysql --defaults-extra-file=<git-ignored option file> ecommerce_test -e "source tests/db/sql/setup.sql"
 --
 -- Writes nothing. Test data is inserted by the TypeScript fixtures (tests/db/harness/fixtures.ts,
 -- reusing prisma/seed/*.seed.ts for states / settings / notification templates) and removed by

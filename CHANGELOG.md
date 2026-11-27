@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### Status — autonomous execution run (2026-11-24)
+
+- **Phase 4 IN PROGRESS — NOT APPROVED; Gate G4 NOT MET.** Batch 9 and Batch 10 are ACCEPTED — OFFLINE MOCKED SCOPE ONLY (owner, 2026-11-24). This changelog was not kept between 2026-11-19 and 2026-11-24; the record of that period is `docs/PHASE3-PHASE4-MASTER-PROGRESS-REPORT.md` §10–§20.
+- **Fixed:** public cacheable GETs (catalogue, CMS, banners, reviews) now send an `ETag` computed from `data` and `meta` only, so `If-None-Match` is answered with 304. Before, the ETag changed with every `requestId` (`src/core/http/publicCache.ts`, `src/core/http/envelope.ts`; test `tests/integration/publicCacheEtag.test.ts`).
+- **Added (tests only):** 113 test cases — schema structure (static, from `prisma/schema.prisma`), strict-environment rules, catalogue SEO and listing search, card-data boundary, barcode label PDF, checkout serviceability, reports with data, permission-cache lifetime, invoice PDF content. One stale state-machine todo became a real assertion.
+- **Changed (CI, never run):** the test step runs `npm run test:coverage` (coverage floors apply); a step checks that `dist/server.js` and `dist/worker.js` exist. _(Clarification 2026-11-27: the words "never run" were not verified. No CI run evidence is recorded in the reviewed project documentation. The 2026-11-18 entry below records a publication to GitHub on branch `main`, and the workflow triggers on pushes to `main`. Whether any CI run exists was not checked, because no Git or GitHub access was used.)_
+- **Added:** `.dockerignore` (excludes `.env*`, `node_modules`, `dist`, `coverage`, `.git`). Never validated by an image build.
+- **Documentation:** `docs/PHASE4-API-CONTRACT-CONFORMANCE-AUDIT.md` (independent contract audit: 248 of 248 documented operations have a route; 57 differences recorded, 32 awaiting the owner); evidence and status documents updated with dated notes. _(Clarification 2026-11-27: 248 is the number of specification operations, all with routes. Route presence is not contract conformance; 32 contract rows are open. See the contract audit §1. The sentence above is kept as written.)_
+- **Verification (local, Node 24.12.0, mocked database, not CI):** 126 files, 3,237 passed, 2 todo, 0 failed; coverage statements 92.77 %, branches 84.07 %, functions 95.80 %, lines 94.32 %; `format:check`, `lint`, `typecheck`, `build`, `openapi:check` pass.
+- **Not done / not claimed:** no database connection, migration or seed; no real provider; no CI run; no container build; no Git operation; no owner decision or deferral.
+
 ### Status — G2/G3 preparation and G3 migration configuration (2026-11-18)
 
 - **G6:** **PASS — ACCEPTED (2026-11-17)** preserved. **Increment B IN PROGRESS; Phase 4 IN PROGRESS — NOT APPROVED.**

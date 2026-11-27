@@ -181,7 +181,10 @@ export function isVerifiablePaymentProvider(
 
 // ── Mock adapter ──────────────────────────────────────────────────────────────────────────────
 
-/** Public TEST values — the mock is refused in production by the payments module. */
+/**
+ * Public TEST values. The mock is refused in production: at start-up by `createContainer`
+ * (src/container.ts) and again by the payments module for `verify` and the webhook.
+ */
 export const MOCK_PAYMENT_KEY_ID = 'mock_key_id';
 export const MOCK_PAYMENT_KEY_SECRET = 'mock-payment-key-test-secret';
 export const MOCK_PAYMENT_WEBHOOK_TEST_SECRET = 'mock-payment-webhook-test-secret';

@@ -10,6 +10,10 @@
  * - ORDER_PAYMENT_AND_REFUND_DATABASE_DESIGN.md §4 defers to PROJECT_CONTEXT §5.1.
  * Doc-vs-code differences are not bent into the expectation: each is listed in KNOWN_CONFLICTS
  * and recorded as `it.todo` (see report). Pure — no DB.
+ *
+ * 2026-11-24: KNOWN_CONFLICTS is empty. Its only entry (`PAYMENT_FAILED → CANCELLED`, "absent from
+ * the §5.1 diagram") went stale when the canonical diagram was corrected on 2026-11-21; the edge
+ * is now part of DOC_CANONICAL and is checked by the real doc-vs-code assertions below.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -27,11 +31,17 @@ const edge = (from: OrderStatus, to: OrderStatus): Edge => `${from}->${to}`;
 
 const STATUSES = Object.values(OrderStatus);
 
-/** PROJECT_CONTEXT.md §5.1 mermaid diagram (excluding [*] start/end markers) — 17 edges. */
+/** PROJECT_CONTEXT.md §5.1 mermaid diagram (excluding [*] start/end markers) — 18 edges. */
 const DOC_CANONICAL: readonly Edge[] = [
   'PENDING_PAYMENT->CONFIRMED', // payment CAPTURED
   'PENDING_PAYMENT->PAYMENT_FAILED', // payment failed / reservation expired
   'PAYMENT_FAILED->PENDING_PAYMENT', // customer retries
+  // Added to the diagram on 2026-11-21. PROJECT_CONTEXT.md:239 reads
+  //   "PAYMENT_FAILED --> CANCELLED : retry window / attempts exhausted (OQ-58, R-06)"
+  // and PROJECT_CONTEXT.md:258 "Diagram correction (2026-11-21): the `PAYMENT_FAILED → CANCELLED`
+  // edge was added to match OQ-58 / R-06 and USER_WORKFLOWS §15.6 (auto-cancel after the retry
+  // window). It was already implemented (`src/lib/orderStateMachine.ts`) ... No behaviour changed."
+  'PAYMENT_FAILED->CANCELLED', // retry window / attempts exhausted (OQ-58, R-06)
   'CONFIRMED->PROCESSING',
   'PROCESSING->PACKED',
   'PACKED->SHIPPED',
@@ -66,15 +76,11 @@ const DOC_ADMIN_7_1: readonly Edge[] = [
 /**
  * Known differences between the §5.1 diagram and the implementation. `code` = implemented?
  * Each is reported as an it.todo; the comparison test fails on any difference NOT listed here.
+ *
+ * Currently none: the former `PAYMENT_FAILED->CANCELLED` entry (doc: false, code: true) was removed
+ * after the 2026-11-21 diagram correction (see DOC_CANONICAL) — doc and code agree on all 18 edges.
  */
-const KNOWN_CONFLICTS: readonly { edge: Edge; doc: boolean; code: boolean; note: string }[] = [
-  {
-    edge: 'PAYMENT_FAILED->CANCELLED',
-    doc: false,
-    code: true,
-    note: 'absent from the PROJECT_CONTEXT §5.1 diagram; code adds it as PROVISIONAL auto-cancel per OQ-58 / R-06 (PROJECT_CONTEXT §15, USER_WORKFLOWS §15.6 "auto-CANCELLED")',
-  },
-];
+const KNOWN_CONFLICTS: readonly { edge: Edge; doc: boolean; code: boolean; note: string }[] = [];
 
 /** Expected implemented edges, written out literally (independent of ORDER_TRANSITIONS). */
 const EXPECTED_ALLOWED: ReadonlySet<Edge> = new Set<Edge>([
@@ -187,8 +193,9 @@ describe('TC-054 documented vs implemented transitions', () => {
   const docOnly = [...docSet].filter((e) => !IMPLEMENTED.has(e));
   const codeOnly = [...IMPLEMENTED].filter((e) => !docSet.has(e));
 
-  it('PROJECT_CONTEXT §5.1 lists 17 edges; implementation has 18', () => {
-    expect(docSet.size).toBe(17);
+  it('PROJECT_CONTEXT §5.1 lists 18 edges (as corrected 2026-11-21); implementation has 18', () => {
+    expect(DOC_CANONICAL).toHaveLength(18);
+    expect(docSet.size).toBe(18);
     expect(IMPLEMENTED.size).toBe(18);
   });
 
@@ -206,6 +213,18 @@ describe('TC-054 documented vs implemented transitions', () => {
 
   it('every documented §5.1 edge is implemented (no doc-only edge)', () => {
     expect(docOnly).toEqual([]);
+  });
+
+  it('every implemented edge is documented in §5.1 (no code-only edge)', () => {
+    expect(codeOnly).toEqual([]);
+    expect([...docSet].sort()).toEqual([...EXPECTED_ALLOWED].sort());
+  });
+
+  it('PAYMENT_FAILED → CANCELLED is documented (§5.1, OQ-58 / R-06) and implemented — no longer a conflict', () => {
+    expect(docSet.has('PAYMENT_FAILED->CANCELLED')).toBe(true);
+    expect(IMPLEMENTED.has('PAYMENT_FAILED->CANCELLED')).toBe(true);
+    expect(canTransition('PAYMENT_FAILED', 'CANCELLED')).toBe(true);
+    expect(KNOWN_CONFLICTS.map((c) => c.edge)).not.toContain('PAYMENT_FAILED->CANCELLED');
   });
 
   it('ADMIN_WORKFLOWS §7.1 staff-driven edges are all implemented and all in §5.1', () => {

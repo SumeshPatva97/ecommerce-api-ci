@@ -37,6 +37,8 @@
 | BLOCKED/DEFERRED   | 0 (row level; GST-17 / B2B sub-parts are deferred, see TC-043, TC-047) | 0       |
 | **Total in scope** | **66**                                                                 | **54**  |
 
+_(Clarification 2026-11-27, row "BLOCKED/DEFERRED": "GST-17 / B2B sub-parts are deferred" is the 2026-11-20 wording and is kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
+
 FE/E2E (3) and STAGING/PERF (1) rows are not assessed against this repository.
 
 ### 1.3 P1 rows that are PARTIALLY COVERED (26) — no P1 row is NOT COVERED
@@ -69,6 +71,8 @@ FE/E2E (3) and STAGING/PERF (1) rows are not assessed against this repository.
 | TC-060 | Escaping, dedupe, retry, secret refusal asserted; not every event rendered                                                                                   |
 | TC-063 | Staff CRUD, permission change, denied, export, LOGOUT, LOGIN_FAILED audited; successful staff LOGIN audit and a general "no secrets in rows" check not found |
 | TC-070 | OpenAPI generator unit-tested and `openapi:check` script exists (not run); approval gate and FE fixture validation are outside this repo                     |
+
+_(Clarification 2026-11-27, row "TC-043": "GST-17 deferred" is the 2026-11-20 wording and is kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
 
 ---
 
@@ -150,6 +154,8 @@ Abbreviations for test paths (all under `ecommerce-api/tests/`):
 | TC-069 | P2       | P    | STAGING/PERF  | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | n/a (STAGING/PERF)               | Needs staging load test.                                                                                                                                                                                          |
 | TC-070 | P1       | K    | CONTRACT      | `unit/scripts/openapi.test.ts`: 'maps each guard to its canonical status and codes, and nothing else'; 'documents the error responses implied by every guard'; 'documents the success statuses each route declares with respondsWith (RD-13 B)'; 'constrains the error code to the canonical list'. Script `openapi:check` = `tsx scripts/generate-openapi.ts --check` in `package.json` (not run)                                                                                                                                                                                                                                                                   | PARTIALLY COVERED — backend half | Backend generator/drift check exists. "Breaking change needs approval" process and FE fixture validation are outside this repo. Whether `openapi:check` runs in CI not verified here.                             |
 
+_(Clarification 2026-11-27, row "TC-043" of the table above: "GST-17 deferred (B2B disabled, OQ-24)" is the 2026-11-20 wording and is kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
+
 ### 2.1 TC-043 detail — GST-01…GST-17
 
 No test file contains a `GST-NN` identifier and there is no single table-driven suite for these cases. Table below maps each case to the closest test by behaviour. "Equivalent" = same rule asserted with different illustrative numbers.
@@ -175,6 +181,8 @@ No test file contains a `GST-NN` identifier and there is no single table-driven 
 | GST-17 B2B with buyer GSTIN                      | **BLOCKED/DEFERRED (B2B disabled, OQ-24)**   | Only `unit/modules/checkout/checkout.test.ts` 'requires quoteHash, shippingMethodId and acceptTerms=true; strips markup from the note' (invalid `buyerGstin` rejected) and `int/reports/reports.test.ts` 'gst-b2b returns an empty result with a notice while B2B is disabled (OQ-24)' |
 
 Tally: 1 present with the same values (GST-05), 10 equivalent (01, 02, 03, 08, 10, 11, 12, 14, 15, 16), 4 partial (06, 07, 09, 13), 1 absent (04), 1 deferred (17).
+
+_(Clarification 2026-11-27, row "GST-17 B2B with buyer GSTIN" and the tally "1 deferred (17)": "BLOCKED/DEFERRED" and "deferred" are the 2026-11-20 wording and are kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
 
 ---
 
@@ -211,8 +219,65 @@ This section supersedes the grades above for the rows listed. Source: `docs/PHAS
 | TC-060 | PARTIAL        | PARTIAL: rendering COVERED for all 22 events; **3 defects** DF-01, DF-02, DF-03                | `unit/modules/notifications/eventRendering.test.ts`       |
 | TC-063 | PARTIAL        | COVERED (mocked)                                                                               | `adminAuth.test.ts` "TC-063 …"                            |
 
+_(Clarification 2026-11-27, row "TC-043": "GST-17 (deferred, OQ-24)" is the 2026-11-20 wording and is kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
+
 **Remaining P1 partials:**
 
 - **Need a real database (DEC-12):** TC-004, 030, 041, 045, 048, 051.
 - **Outside this package:** TC-025 (UI half), TC-033 (barcode decode), TC-047 (golden dataset), TC-070 (FE half).
 - **TC-060:** the three defects above.
+
+## Verified update — 2026-11-24 (master completion run; executed evidence)
+
+This section supersedes the two sections above for the rows listed. The full suite was **executed**
+on Node 24.12.0: 119 files, 3,110 passed, 3 todo, 0 failed (mocked / offline). Source:
+`docs/PHASE4-MASTER-COMPLETION-AND-G4-READINESS-REPORT.md`.
+
+| TC                              | Previous grade                           | Now                                                                                                                                                  | Evidence                                                                                            |
+| ------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| TC-060                          | PARTIAL (rendering covered; DF-01/02/03) | COVERED (mocked). DF-01, DF-02 and DF-03 were fixed on 2026-11-21 and re-verified on 2026-11-24                                                      | `unit/modules/notifications/eventRendering.test.ts` (241 tests); `PHASE4-MASTER-AGENT1-…-REPORT.md` |
+| TC-004, 030, 041, 045, 048, 051 | PARTIAL (need a real database)           | **Still PARTIAL.** A real-database scenario is now **prepared** for each (`tests/db/scenarios/*.dbtest.ts`). None has been executed (DEC-12 pending) | `tests/db/README.md`; `PHASE4-MASTER-AGENT8-DB-HARNESS-REPORT.md`                                   |
+| TC-043 (GST-15 database part)   | todo                                     | Unchanged: todo, pending real-database execution (DEC-12). GST-17 stays deferred (B2B, OQ-24)                                                        | `unit/lib/tax/gstCatalogue.test.ts`                                                                 |
+
+_(Clarification 2026-11-27, rows "TC-004, 030, 041, 045, 048, 051" and "TC-043 (GST-15 database part)" — both rows are the 2026-11-24 position and are kept as written. DEC-12 is no longer pending: on 2026-11-27 the owner decided that real MySQL verification of all six scenarios is mandatory for G4. It remains true that none of the six has been executed: they are PREPARED — NOT EXECUTED. G7 PASS is a prerequisite and does not by itself authorize execution; a separate explicit written owner authorization is required. GST-15 is excluded from DEC-12 and requires a separate owner decision, so "pending real-database execution (DEC-12)" must not be read as placing GST-15 under DEC-12. Record: `PHASE4-FINAL-OWNER-DECISION-PACKAGE.md`, D10.)_
+
+_(Clarification 2026-11-27 — traceability: TC-041 is the real-database evidence scenario for requirement FR-CPN-008 and its acceptance criterion AC-03. TC-041 remains PREPARED — NOT EXECUTED, and no real-MySQL evidence exists yet. TC-041 provides evidence; it does not make owner decisions. Coupon hardening remains NOT AUTHORIZED pending review of the TC-041 evidence and a separate owner decision.)_
+
+_(Clarification 2026-11-27, row "TC-043 (GST-15 database part)": "GST-17 stays deferred (B2B, OQ-24)" is the 2026-11-24 wording and is kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
+
+**Remaining P1 partials (unchanged list, except TC-060):**
+
+- **Need a real database (DEC-12):** TC-004, 030, 041, 045, 048, 051. For TC-041, code reading
+  predicts a possible failure (coupon over-redemption under concurrency); this is not reproduced.
+- **Outside this package:** TC-025 (UI half), TC-033 (barcode decode), TC-047 (golden dataset),
+  TC-070 (FE half).
+
+This update does not change any project, batch or gate status.
+
+## Verified update — 2026-11-24, later (autonomous execution run; executed evidence)
+
+This section supersedes the sections above for the rows listed. The full suite was **executed** on
+Node 24.12.0: 126 files, 3,237 passed, 2 todo, 0 failed (mocked / offline).
+
+| TC          | Previous grade                                     | Now                                                                                                                                          | Evidence                                                              |
+| ----------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| TC-027 (P2) | PARTIAL (attribute-based relatedness not asserted) | COVERED (mocked)                                                                                                                             | `integration/modules/products/catalog.test.ts` "TC-027: …" ×2         |
+| TC-034 (P2) | PARTIAL — API part                                 | API part COVERED (mocked) for layout, copies and printed text; decoding the bars back to the value is still not done (no decoder dependency) | `integration/modules/barcodes/barcodes.labelsPdf.test.ts`, 4 tests    |
+| TC-049 (P2) | PARTIAL                                            | COVERED (mocked): summary and placement refuse a non-serviceable pincode; placement re-checks                                                | `integration/modules/checkout/checkout.routes.test.ts` "TC-049: …" ×5 |
+| TC-054      | COVERED, with diagram conflict DC-01               | COVERED (mocked); the conflict is gone — the diagram was corrected on 2026-11-21 and the todo is now a real assertion                        | `unit/modules/orders/stateMachineMatrix.test.ts`                      |
+| TC-043      | COVERED except GST-15 database part and GST-17     | Unchanged: two todo tests remain (GST-15 needs a real database, DEC-12; GST-17 is deferred, OQ-24)                                           | `unit/lib/tax/gstCatalogue.test.ts`                                   |
+
+_(Clarification 2026-11-27, row "TC-043" — "GST-15 needs a real database, DEC-12" is the 2026-11-24 wording and is kept as written. GST-15 is excluded from DEC-12 and requires a separate owner decision; it is not approved, deferred, implemented or verified. DEC-12 itself was decided on 2026-11-27: real MySQL verification of the six scenarios listed below is mandatory for G4. They are still PREPARED — NOT EXECUTED, and DEC-12 does not authorize their execution.)_
+
+_(Clarification 2026-11-27, row "TC-043": "GST-17 is deferred, OQ-24" is the 2026-11-24 wording and is kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
+
+**Remaining P1 partials (unchanged):**
+
+- **Need a real database (DEC-12):** TC-004, 030, 041, 045, 048, 051. BLOCKED — USER-ONLY DATABASE GATE.
+- **Outside this package:** TC-025 (UI half), TC-033 (barcode decode), TC-047 (golden dataset), TC-070 (FE half).
+
+**Found while testing (not fixed; owner questions in `PHASE4-API-CONTRACT-CONFORMANCE-AUDIT.md` §6):**
+the label preview lists text lines that the printed PDF drops (TW-01); a courier outage does not
+block checkout (CA1-25).
+
+This update does not change any project, batch or gate status.

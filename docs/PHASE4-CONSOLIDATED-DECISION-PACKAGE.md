@@ -23,6 +23,8 @@ How to answer: reply with the decision ID and the option letter (e.g. "DEC-14: A
 > four were implemented. Still open: ACC-02, DEC-08, DEC-10, DEC-12, and the individual deferral
 > approvals. See `PHASE4-REMAINING-USER-DECISIONS.md`.
 
+> **Status update (2026-11-27) — the block above is historical.** It records the position on 2026-11-21 and must not be read as the current decision status. In particular, "Still open: … DEC-12" no longer holds: **DEC-12 was decided by the owner on 2026-11-27.** Real MySQL verification of all six concurrency scenarios is mandatory for G4. The six scenarios remain PREPARED — NOT EXECUTED. G7 PASS is a prerequisite before execution; G7 PASS alone does not authorize execution; a separate explicit written owner authorization is also required. GST-15 is excluded from DEC-12 and requires a separate owner decision. For the current status of every decision named in this document, use `PHASE4-FINAL-OWNER-DECISION-PACKAGE.md`.
+
 ## Summary
 
 | ID     | Decision                              | Recommendation (short)                                                                                   | Blocks                             |
@@ -36,6 +38,8 @@ How to answer: reply with the decision ID and the option letter (e.g. "DEC-14: A
 | DEC-12 | Real-database verification for G4     | A: required, via the procedure in §DEC-12, after G7                                                      | G4 criterion 2 (6 cases), Batch 12 |
 | DEC-13 | Formal deferral list                  | Defer the blocked items and the [PROPOSED] portions; implement or defer the 11 other partials explicitly | G4 criteria 1 and 2                |
 | DEC-14 | Defect convention for G4              | A: G4 "P0 / P1" = TESTING_STRATEGY §19 "S1 / S2"                                                         | G4 criterion 3                     |
+
+_(Clarification 2026-11-27, row DEC-12 — the row is the 2026-11-20 recommendation and is kept as written. DEC-12 is no longer an open decision: the owner decided it on 2026-11-27, and real MySQL verification of all six concurrency scenarios is mandatory for G4. The row's "Blocks" entry names Batch 12. The decision does not address Batch 12, which stays open.)_
 
 ---
 
@@ -90,7 +94,7 @@ Acceptance criteria per WP: proposal §3. Gates: proposal §5.
 - API late capture (verify / webhook);
 - admin retry of a `FAILED` gateway refund.
 
-If the process stops in between, the refund stays `PROCESSING` with no provider refund id.
+If the process stops in between, the refund stays `PROCESSING` with no provider refund id. _(Note 2026-11-24: after an admin retry, the provider refund id of an earlier failed attempt can still be stored; see the runbook §9.1 step 1.)_
 
 **Outcomes:**
 
@@ -127,6 +131,8 @@ Nothing will be implemented until you choose.
 **Current behaviour.** Status is derived from dates: `now ≥ ends_at` → `EXPIRED`
 (`promotions.rules.ts` line 73). The activation job moves `SCHEDULED / ACTIVE → EXPIRED`. Editing
 `ends_at` into the future could therefore make an expired promotion active again.
+
+> **Clarification (2026-11-24, code re-read).** The last sentence holds only while the **stored** status is still `SCHEDULED` / `ACTIVE` after `ends_at`. Once `EXPIRED` is stored (activation job, resume, or a `PATCH` that keeps the past dates), a date edit is accepted but the status stays `EXPIRED`. D-63 adopted option A as the rule; the service guard is not authorized (DEC-06-impl).
 
 **Options:**
 
@@ -186,6 +192,14 @@ explicit authorization.
 Only the wording is stale.
 
 ## DEC-12 — Real-database verification
+
+**Clarification 2026-11-27 — this section is historical.** It is the proposal of 2026-11-20 and is kept as written. It is not the current decision record and it is not the current procedure.
+
+- **Decision.** DEC-12 was decided by the owner on 2026-11-27: real MySQL verification of all six concurrency scenarios listed below is mandatory for G4. The "Options" and "Recommendation" at the end of this section are the proposal that preceded that decision. Current record: `PHASE4-FINAL-OWNER-DECISION-PACKAGE.md`, D10.
+- **State.** The six scenarios remain PREPARED — NOT EXECUTED. TC-041 is the real-database evidence scenario for FR-CPN-008 / AC-03 and has not been executed.
+- **Execution.** G7 PASS is a prerequisite. G7 PASS alone does not authorize execution. A separate explicit written authorization from the owner is also required, and DEC-12 does not give it. DEC-12 does not authorize G8, seeds, staging or any unrelated operation. G2 and G3 statuses are unchanged.
+- **Procedure.** The "Proposed procedure" below is an older description. It differs from the current procedure, in particular on how credentials are supplied and how test data is cleaned up, and it must not be followed. The current authorized procedure must be taken from `PHASE4-OWNER-EXECUTION-RUNBOOK.md` §5 and `tests/db/README.md`.
+- **Outside DEC-12.** GST-15 is excluded and requires a separate owner decision. The Batch 12 suite mentioned below is not addressed by the decision and stays open. Coupon hardening remains NOT AUTHORIZED pending review of the TC-041 evidence and a separate owner decision.
 
 **Cases mocks cannot prove (QA-03):**
 
@@ -293,6 +307,25 @@ or re-word).**
 **Recommendation:** approve Groups 1 and 2 as formal deferrals. For Group 3, authorize a small
 "G4 gap" implementation batch for the six small items (plus FR-PRM-004, FR-TAX-013 after the tax
 confirmation). Nothing is marked deferred until you approve.
+
+> **Addendum (2026-11-24, DEC-13 re-verified; evidence: `PHASE4-MASTER-AGENT6-DEC13-TRACEABILITY-REPORT.md`).**
+>
+> - "Six small items" above is wrong: exactly **four** rows are marked "Implement (small)", and only
+>   those four were implemented on 2026-11-21 (D-66).
+> - **FR-ORD-006, FR-INV-006, FR-SF-004:** implemented and tested (mocked).
+> - **FR-AD-008 is still PARTIAL.** Both settings are read on their main paths. Two paths still
+>   ignore them: payment retry uses the environment TTL, and the recently-viewed list uses the
+>   30-day default for the new-arrival badge. Closing them is a small change that is **not
+>   authorized** (it was not part of the four items as described).
+> - **FR-PRM-004 belongs in Group 2 as well.** Its source is `[PROPOSED]`, and its "never below ₹1"
+>   floor is marked `[PROPOSED]`. The pricing engine floor is ₹0.01. The Group 3 recommendation
+>   "Implement" stands as a recommendation only; the floor needs its own decision because it changes
+>   cart and checkout totals.
+> - **FR-TAX-013:** RD-01 contains only the odd-paisa question. No HSN-summary question has been
+>   written for the tax professional yet, and the requirement does not say whether "HSN summary"
+>   means a block on each invoice or the periodic `gst-hsn` report (which exists).
+> - **FR-PRM-004, FR-PL-013, FR-TAX-013 are not implemented.** Recommendations and proposed
+>   acceptance criteria are in the Agent 6 report, Part B. No deferral record exists for them yet.
 
 ## DEC-14 — Defect convention for G4
 

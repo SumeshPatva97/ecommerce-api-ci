@@ -1,6 +1,6 @@
 # Phase 4 — Background Jobs and Scheduling
 
-**Status:** scheduler with 10 registered jobs, run by the **dedicated worker process** (`src/worker.ts`, Batch 9 — COMPLETE, PENDING USER ACCEPTANCE) (Batch 8 added `abandoned-carts`; Batch 8 + M1 **accepted — offline mocked scope only**, 2026-11-20), tested with a **mocked DB** only. Not run against MySQL, not validated for production. **Off by default** (`JOBS_ENABLED=false`). **Single server only**: multi-server safety is **not** claimed (§5).
+**Status:** scheduler with 10 registered jobs, run by the **dedicated worker process** (`src/worker.ts`, Batch 9 — **ACCEPTED — OFFLINE MOCKED SCOPE ONLY**, owner, 2026-11-24; previously "COMPLETE, PENDING USER ACCEPTANCE") (Batch 8 added `abandoned-carts`; Batch 8 + M1 **accepted — offline mocked scope only**, 2026-11-20), tested with a **mocked DB** only. Not run against MySQL, not validated for production. **Off by default** (`JOBS_ENABLED=false`). **Single server only**: multi-server safety is **not** claimed (§5).
 **Updated:** 2026-11-20 (batches 3–5, Batch 7 fixes D1–D5 + RD-10, Batch 8 abandoned carts + M1) · **Spec:** `project-documentation/04-backend/BACKEND_STRUCTURE.md` §14 · **Constraint:** D-38 / OQ-35 (Redis/BullMQ deferred)
 
 ## 1. Scheduler
@@ -13,7 +13,7 @@
 | `src/worker.ts` / `src/workerRuntime.ts` | **Dedicated worker process** (D-61, Batch 9): runs the scheduler only when `JOBS_ENABLED=true` (otherwise logs and exits 0); no HTTP server; heartbeat log every minute; graceful shutdown (`src/core/lifecycle/workerLifecycle.ts`): stop signal → wait for running jobs → disconnect DB → exit; second signal ignored; forced exit after 60 s. |
 | `src/server.ts`                          | API process: **never** starts the scheduler (Batch 9); `JOBS_ENABLED=true` there is ignored with a warning.                                                                                                                                                                                                                                      |
 
-Enabling the scheduler in any environment is an owner decision. Nothing turns it on automatically. **RD-12 is DECIDED (2026-11-20, D-61): single dedicated worker process, separate from the API; multi-server scheduling deferred; no Redis/BullMQ.** **Batch 9 (COMPLETE — PENDING USER ACCEPTANCE; offline / mocked validation only)** implements it: jobs run only in the worker (`npm run dev:worker` / `npm run start:worker`, with `JOBS_ENABLED=true` for the worker only); the API process never runs them. Long jobs (payment reconciliation, tracking poll, notification dispatch) check a stop signal between items, so shutdown never interrupts an item halfway (WP-O2).
+Enabling the scheduler in any environment is an owner decision. Nothing turns it on automatically. **RD-12 is DECIDED (2026-11-20, D-61): single dedicated worker process, separate from the API; multi-server scheduling deferred; no Redis/BullMQ.** **Batch 9 (ACCEPTED — OFFLINE MOCKED SCOPE ONLY, owner, 2026-11-24; previously "COMPLETE — PENDING USER ACCEPTANCE"; offline / mocked validation only)** implements it: jobs run only in the worker (`npm run dev:worker` / `npm run start:worker`, with `JOBS_ENABLED=true` for the worker only); the API process never runs them. Long jobs (payment reconciliation, tracking poll, notification dispatch) check a stop signal between items, so shutdown never interrupts an item halfway (WP-O2).
 
 ## 2. Job coverage against §14
 
@@ -39,7 +39,7 @@ Enabling the scheduler in any environment is an owner decision. Nothing turns it
 
 **shipment-tracking-poll.** It polls dispatched, non-terminal shipments (`SHIPPED`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERY_FAILED`, `RTO_INITIATED`) booked through a polling adapter (`provider` = `<adapter>:<courier>`), 200 per adapter per run, with an 8 s courier timeout (§15). **D4:** rows are read in id order after a per-adapter cursor kept by the registry, so every in-flight shipment is polled in turn. §14 names only SHIPPED/IN_TRANSIT; the other three are included so deliveries and returns are still detected. Events are applied by the same code as the webhook (`applyProviderEvents`, source `SYSTEM`). The dedupe hash is `sha256(provider:eventId)` whatever the source, so an event received by webhook and poll is stored once.
 
-**promotion-activation.** Pricing and admin reads already evaluate dates (`effectiveStatus`), so the job keeps the stored status and the audit trail in line; correctness does not depend on it. **D1:** the compare-and-set matches status, `starts_at` and `ends_at` as read, so an admin date edit in between makes the write a no-op. §14's cache invalidation is not needed (no cache exists).
+**promotion-activation.** Pricing and admin reads already evaluate dates (`effectiveStatus`), so the job keeps the stored status and the audit trail in line; correctness does not depend on it. **D1:** the compare-and-set matches status, `starts_at` and `ends_at` as read, so an admin date edit in between makes the write a no-op. §14's cache invalidation is not needed (no cache exists). _(Added 2026-11-24, D-63.)_ A stored `EXPIRED` is final: the job never selects such a row, and a `PATCH` leaves it `EXPIRED` even when the dates are edited. Known discrepancy: while the stored status is still `SCHEDULED` / `ACTIVE` after `ends_at` (the job has not run yet, or no worker is running), a `PATCH` that moves `ends_at` into the future makes the promotion effective again. No correction is authorized (DEC-06-impl).
 
 **best-seller-refresh.** Units = `quantity − quantity_cancelled` on order lines whose order was confirmed in the last 90 days and is not PENDING_PAYMENT / PAYMENT_FAILED / CANCELLED. Returns are not subtracted. The OQ-50 admin pin **already exists** (`products.is_best_seller_pinned`, applied first by the catalogue sort); the job does not touch it. Only changed products are written.
 
@@ -67,7 +67,7 @@ Tests: `tests/unit/jobs/{scheduler,paymentReconciliation,shipmentTrackingPoll,ca
 
 - **Today:** no lock. Only the dedicated worker runs jobs (the API never does). Running two workers would run every job twice. §14 requires `lock:job:<name>` per job.
 - **Why the jobs are still written defensively:** row locks plus compare-and-set (orders, promotions), dedupe hashes (tracking), and idempotent capture/fail services. A duplicate run _should_ not corrupt data, but it doubles gateway, courier and notification work. This has **not** been verified on MySQL or across processes.
-- **RD-12 decided 2026-11-20 (D-61); implemented in Batch 9 (pending acceptance):** a single dedicated worker process runs all jobs; multi-server / distributed scheduling is **deferred**; no Redis/BullMQ without a future decision. **Operational rule (B3, deployment discipline):** run **exactly one** worker process, and **stop the old worker before starting a replacement** (no overlap during deployments). No database-level guard exists; that is evaluated in Batch 12.
+- **RD-12 decided 2026-11-20 (D-61); implemented in Batch 9 (accepted for offline mocked scope only on 2026-11-24; previously "pending acceptance"):** a single dedicated worker process runs all jobs; multi-server / distributed scheduling is **deferred**; no Redis/BullMQ without a future decision. **Operational rule (B3, deployment discipline):** run **exactly one** worker process, and **stop the old worker before starting a replacement** (no overlap during deployments). No database-level guard exists; that is evaluated in Batch 12.
 - **Options considered for RD-12 (history; option 3 chosen):** BullMQ repeatable jobs + Redis lock (documented design, needs Redis); MySQL `GET_LOCK` per run (needs a design note for Prisma connection pooling, plus MySQL testing); a dedicated single worker process.
 
 ## 6. Other deviations
@@ -94,7 +94,7 @@ This section adds no behaviour. It records limitations of the current implementa
 3. **Notifications stuck in `SENDING`.** A forced termination during a send can leave a row in `SENDING`. No code reclaims such rows; manual recovery is required (B5).
 4. **60 s forced exit.** It can interrupt a running job, or an operation that runs after a transaction has committed (e.g. a gateway refund call or a notification send). The open transaction rolls back; post-commit work is lost.
 5. **M-1 refund interruption.**
-   - **Flows.** It applies to four flows:
+   - **Flows.** It applies to five code paths _(count aligned 2026-11-24 with D-64 and the runbook §9; previously "four flows")_. Four are listed here and the fifth, the admin retry, is named below:
      - worker-side late-capture refund (`payment-reconciliation`);
      - API staff refund approval;
      - API customer self-cancel;
@@ -103,7 +103,7 @@ This section adds no behaviour. It records limitations of the current implementa
      The admin retry of a `FAILED` gateway refund follows the same commit-then-call pattern.
 
    - **What happens.** The refund is committed as `PROCESSING` and the gateway call runs after commit. An interruption between the two leaves it **`PROCESSING`**. **No automatic recovery exists**: retry accepts only `FAILED`, and no job re-checks `PROCESSING` refunds.
-   - **Manual handling.** A gateway refund may be recorded as completed (`POST /admin/refunds/:refundId/complete`, which records only and never calls the gateway) **only after the provider confirms the refund actually completed**. This is a procedural rule, not enforced by code.
+   - **Manual handling.** A gateway refund may be recorded as completed (`POST /admin/refunds/:refundId/complete`, which records only and never calls the gateway) **only after the provider confirms the refund actually completed**. This is a procedural rule, not enforced by code. _(Added 2026-11-24.)_ The manual procedure adopted by D-64 is in `docs/operations/DEPLOYMENT_AND_OPERATIONS.md` §9.1: the provider-side status is established before any action. A "re-submit gateway refund" action is a proposal only and does not exist.
 6. **Premature `REFUND_INITIATED`.** In staff approval and customer self-cancel, the notification is queued inside the transaction, before the gateway call. It may be delivered even if the gateway call never happens.
 
 **Unresolved business decisions (not decided here):**

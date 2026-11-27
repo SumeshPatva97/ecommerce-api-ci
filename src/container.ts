@@ -4,7 +4,7 @@
  *
  * Tests build a container with a mocked `db` (see tests/helpers/container.ts).
  */
-import type { AppConfig } from './core/config/index.js';
+import { ConfigError, type AppConfig } from './core/config/index.js';
 import type { DbClient } from './core/db/transaction.js';
 import type { Logger } from './core/logger/logger.js';
 import { createAuthMiddleware, type AuthMiddleware } from './core/middleware/auth.js';
@@ -75,12 +75,39 @@ export interface ContainerOverrides {
   readonly providers?: Partial<Providers>;
 }
 
+/** Names the variable only — never a value, URL or secret. */
+export const MOCK_PAYMENT_IN_PRODUCTION =
+  'PAYMENT_PROVIDER: the mock payment provider cannot run in production.';
+
+/**
+ * Start-up refusal (security control PW-08 / finding A9-F02). The mock gateway authenticates the
+ * customer's payment callback with a public test constant, so a production process must never
+ * hold it. The check is on the provider that will really be used, including an injected one.
+ */
+function assertPaymentProviderAllowed(
+  config: Pick<AppConfig, 'nodeEnv'>,
+  provider: PaymentProviderAdapter,
+): void {
+  if (config.nodeEnv === 'production' && provider.name === 'mock') {
+    throw new ConfigError([MOCK_PAYMENT_IN_PRODUCTION]);
+  }
+}
+
 export function createContainer(
   config: AppConfig,
   logger: Logger,
   db: DbClient,
   overrides: ContainerOverrides = {},
 ): AppContainer {
+  const payment =
+    overrides.providers?.payment ??
+    new MockPaymentProviderAdapter(
+      config.integrations.paymentWebhookSecret === undefined
+        ? {}
+        : { webhookSecret: config.integrations.paymentWebhookSecret },
+    );
+  assertPaymentProviderAllowed(config, payment);
+
   const clock = overrides.clock ?? (() => new Date());
   const store = overrides.store ?? createMemoryStore(() => clock().getTime());
 
@@ -135,13 +162,7 @@ export function createContainer(
     providers: {
       email: overrides.providers?.email ?? new FakeEmailProviderAdapter(),
       whatsapp: overrides.providers?.whatsapp ?? new MockWhatsAppProviderAdapter(),
-      payment:
-        overrides.providers?.payment ??
-        new MockPaymentProviderAdapter(
-          config.integrations.paymentWebhookSecret === undefined
-            ? {}
-            : { webhookSecret: config.integrations.paymentWebhookSecret },
-        ),
+      payment,
       media: overrides.providers?.media ?? new MockMediaProviderAdapter(),
       shipping:
         overrides.providers?.shipping ??

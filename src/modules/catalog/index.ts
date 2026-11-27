@@ -7,9 +7,10 @@
  * stale-while-revalidate=300` (API §2.5); personalised detail (customer token → isWishlisted)
  * stays `private, no-store` (global default).
  */
-import { Router, type Request, type RequestHandler, type Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 
 import { ok } from '../../core/http/envelope.js';
+import { markPublicCache, publicCache } from '../../core/http/publicCache.js';
 import { getValidated, validate } from '../../core/middleware/validate.js';
 import { deliveryFromConfig } from '../media/cloudinary.js';
 import type { ModuleFactory } from '../types.js';
@@ -23,13 +24,6 @@ import {
   SlugParams,
 } from './catalog.schemas.js';
 import { createCatalogService } from './catalog.service.js';
-
-const PUBLIC_CACHE = 'public, max-age=60, stale-while-revalidate=300';
-
-const publicCache: RequestHandler = (_req, res, next) => {
-  res.set('Cache-Control', PUBLIC_CACHE);
-  next();
-};
 
 export const createCatalogModule: ModuleFactory = (container) => {
   const service = createCatalogService({
@@ -71,7 +65,7 @@ export const createCatalogModule: ModuleFactory = (container) => {
       const { variant } = getValidated(req, 'query', DetailQuery);
       const customerId = req.authz?.accountType === 'CUSTOMER' ? req.authz.userId : undefined;
       const data = await service.detail(slug, { variantSku: variant, customerId });
-      if (customerId === undefined) res.set('Cache-Control', PUBLIC_CACHE);
+      if (customerId === undefined) markPublicCache(res);
       ok(req, res, data);
     },
   );

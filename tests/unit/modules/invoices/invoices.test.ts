@@ -4,6 +4,7 @@
  * PDF output; no SQL is executed.
  */
 import { randomUUID } from 'node:crypto';
+import { inflateSync } from 'node:zlib';
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +14,7 @@ import { Decimal } from '../../../../src/lib/money.js';
 import { createAuditService } from '../../../../src/modules/audit/audit.service.js';
 import {
   amountInWords,
+  buildInvoicePdf,
   formatInr,
   invoiceGroups,
   issueCreditNote,
@@ -446,6 +448,437 @@ describe('invoice PDF', () => {
       'Rupees Twelve Lakh Fifty Thousand and Fifty Paise Only',
     );
     expect(pdfFilename('INV/2627/000001')).toBe('INV-2627-000001.pdf');
+  });
+});
+
+describe('FR-TAX-013 invoice PDF content (per-line components and totals)', () => {
+  interface PdfRun {
+    readonly x: number;
+    readonly y: number;
+    readonly text: string;
+  }
+
+  /**
+   * Text runs drawn on the page. PDFKit Flate-compresses the content stream; `node:zlib` (built in,
+   * no extra dependency) inflates it and every `[<hex> kern <hex> …] TJ` operator — WinAnsi hex
+   * strings of the standard Helvetica fonts — is one drawn run at the preceding `Tm` position.
+   */
+  function pdfRuns(pdf: Buffer): PdfRun[] {
+    const runs: PdfRun[] = [];
+    for (const stream of pdf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+      let content: string;
+      try {
+        content = inflateSync(Buffer.from(stream[1] ?? '', 'latin1')).toString('latin1');
+      } catch {
+        continue; // not a Flate content stream
+      }
+      for (const block of content.matchAll(/BT\s([\s\S]*?)\sET/g)) {
+        const body = block[1] ?? '';
+        const tm = /1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm/.exec(body);
+        const tj = /\[(.*)\] TJ/.exec(body);
+        if (tm === null || tj === null) continue;
+        const text = [...(tj[1] ?? '').matchAll(/<([0-9a-f]*)>/gi)]
+          .map((hex) => Buffer.from(hex[1] ?? '', 'hex').toString('latin1'))
+          .join('');
+        runs.push({ x: Number(tm[1]), y: Number(tm[2]), text });
+      }
+    }
+    return runs;
+  }
+
+  /** Runs sharing a baseline, top of page first, cells left to right (table rows → cell arrays). */
+  function pdfRows(runs: readonly PdfRun[]): string[][] {
+    const byY = new Map<number, PdfRun[]>();
+    for (const run of runs) byY.set(run.y, [...(byY.get(run.y) ?? []), run]);
+    return [...byY.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .map(([, cells]) => [...cells].sort((a, b) => a.x - b.x).map((c) => c.text));
+  }
+
+  /** Lines printed under a block heading (`Bill to` / `Ship to`), down to the line table. */
+  function blockLines(runs: readonly PdfRun[], heading: string): string[] {
+    const head = runs.find((r) => r.text === heading);
+    const table = runs.find((r) => r.text === '#');
+    if (head === undefined || table === undefined) throw new Error(`"${heading}" block not found`);
+    return runs
+      .filter((r) => Math.abs(r.x - head.x) < 0.01 && r.y < head.y && r.y > table.y)
+      .sort((a, b) => b.y - a.y)
+      .map((r) => r.text);
+  }
+
+  const INVOICE_ID = '0b9a7c1e-1111-4a2b-9c3d-0000000000f1';
+
+  /** One `tax_transactions` row (line × component) as selected by the PDF loader. */
+  const ledger = (
+    orderItemId: string | null,
+    lineType: 'ITEM' | 'SHIPPING',
+    component: 'CGST' | 'SGST' | 'IGST',
+    hsnCode: string,
+    rate: string,
+    taxableValue: string,
+    amount: string,
+  ) => ({
+    orderItemId,
+    lineType,
+    component,
+    hsnCode,
+    rate: new Decimal(rate),
+    taxableValue: new Decimal(taxableValue),
+    amount: new Decimal(amount),
+  });
+
+  /** `invoice_records` row + relations for worked example A (₹4,320.00, mixed 3 % / 18 % cart). */
+  function invoiceRow(over: Record<string, unknown> = {}) {
+    return {
+      id: INVOICE_ID,
+      invoiceType: 'TAX_INVOICE',
+      invoiceNumber: 'INV/2627/000001',
+      invoiceDate: new Date('2026-11-19T00:00:00.000Z'),
+      sellerGstin: '27ABCDE1234F1Z5',
+      sellerStateCode: '27',
+      buyerGstin: null,
+      placeOfSupplyStateCode: '27',
+      supplyType: 'INTRA_STATE',
+      taxableTotal: new Decimal('3909.50'),
+      taxTotal: new Decimal('410.50'),
+      grandTotal: new Decimal('4320.00'),
+      createdAt: NOW,
+      sellerState: { name: 'Maharashtra' },
+      posState: { name: 'Maharashtra' },
+      originalInvoice: null,
+      refund: null,
+      // Stored order is irrelevant: the document sorts goods by line number, then shipping.
+      taxTransactions: [
+        ledger(L2, 'SHIPPING', 'CGST', '9999', '18.00', '45.25', '4.07'),
+        ledger(L2, 'SHIPPING', 'SGST', '9999', '18.00', '45.25', '4.07'),
+        ledger(L2, 'ITEM', 'CGST', '9999', '18.00', '1909.49', '171.86'),
+        ledger(L2, 'ITEM', 'SGST', '9999', '18.00', '1909.49', '171.86'),
+        ledger(L1, 'SHIPPING', 'CGST', '7113', '3.00', '45.25', '0.68'),
+        ledger(L1, 'SHIPPING', 'SGST', '7113', '3.00', '45.25', '0.68'),
+        ledger(L1, 'ITEM', 'CGST', '7113', '3.00', '1909.51', '28.64'),
+        ledger(L1, 'ITEM', 'SGST', '7113', '3.00', '1909.51', '28.64'),
+      ],
+      order: {
+        orderNumber: 'ORD-261118-00001',
+        placedAt: new Date('2026-11-17T19:00:00.000Z'), // 18 Nov 00:30 IST
+        paymentMethod: 'ONLINE',
+        roundOff: new Decimal('0.00'),
+        customerNameSnapshot: 'Riya Sharma',
+        buyerLegalName: null,
+        billingAddressSnapshot: {
+          fullName: 'Riya Sharma',
+          line1: '12 MG Road',
+          city: 'Pune',
+          pincode: '411001',
+          stateCode: '27',
+        },
+        shippingAddressSnapshot: {
+          fullName: 'Asha Sharma',
+          line1: '4 Lake View',
+          line2: 'Baner',
+          city: 'Pune',
+          pincode: '411045',
+          stateCode: '27',
+        },
+        items: [
+          {
+            id: L1,
+            lineNo: 1,
+            productName: 'Silver ring',
+            variantName: 'Size 7',
+            sku: 'RNG-7',
+            quantity: 1,
+          },
+          {
+            id: L2,
+            lineNo: 2,
+            productName: 'Gift hamper',
+            variantName: null,
+            sku: 'HMP-2',
+            quantity: 2,
+          },
+        ],
+      },
+      ...over,
+    };
+  }
+
+  function setup(row: Record<string, unknown>) {
+    const { db, m } = createMockDb();
+    m.invoiceRecord.findFirst.mockResolvedValue(row);
+    // Seller legal name / address are read from the current tax settings at render time.
+    m.setting.findMany.mockResolvedValue([
+      { settingKey: 'tax.seller_legal_name', value: 'Example Jewels Pvt Ltd' },
+      {
+        settingKey: 'tax.seller_address',
+        value: { line1: '1 Zaveri Bazaar', city: 'Mumbai', pincode: '400002' },
+      },
+    ]);
+    return { db, m };
+  }
+
+  const lineView = (document: InvoiceDocumentData) =>
+    document.lines.map((l) => ({
+      description: l.description,
+      hsnCode: l.hsnCode,
+      quantity: l.quantity,
+      rate: l.rate.toFixed(2),
+      taxableValue: money(l.taxableValue),
+      components: l.components.map((c) => `${c.component} ${money(c.amount)}`),
+      total: money(l.total),
+    }));
+
+  it('FR-TAX-013: intra-state tax invoice prints seller/buyer blocks, number/date and per-line HSN, taxable value, CGST/SGST and totals', async () => {
+    const { db, m } = setup(invoiceRow());
+    const { pdf, filename, document } = await buildInvoicePdf(
+      db,
+      { orderId: ORDER_ID, type: 'TAX_INVOICE' },
+      { generatedAt: NOW },
+    );
+    expect(m.invoiceRecord.findFirst.mock.calls[0]?.[0]).toMatchObject({
+      where: { orderId: ORDER_ID, invoiceType: 'TAX_INVOICE' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(filename).toBe('INV-2627-000001.pdf');
+
+    // 1) Document model handed to the renderer: one line per (order line × line type); line total
+    //    = taxable + its components: 1909.51 + 28.64 + 28.64 = 1966.79; 1909.49 + 171.86 + 171.86
+    //    = 2253.21; shipping 45.25 + 0.68 + 0.68 = 46.61 and 45.25 + 4.07 + 4.07 = 53.39.
+    expect(lineView(document)).toEqual([
+      {
+        description: 'Silver ring - Size 7 (SKU RNG-7)',
+        hsnCode: '7113',
+        quantity: 1,
+        rate: '3.00',
+        taxableValue: '1909.51',
+        components: ['CGST 28.64', 'SGST 28.64'],
+        total: '1966.79',
+      },
+      {
+        description: 'Gift hamper (SKU HMP-2)',
+        hsnCode: '9999',
+        quantity: 2,
+        rate: '18.00',
+        taxableValue: '1909.49',
+        components: ['CGST 171.86', 'SGST 171.86'],
+        total: '2253.21',
+      },
+      {
+        description: 'Shipping',
+        hsnCode: '7113',
+        quantity: null,
+        rate: '3.00',
+        taxableValue: '45.25',
+        components: ['CGST 0.68', 'SGST 0.68'],
+        total: '46.61',
+      },
+      {
+        description: 'Shipping',
+        hsnCode: '9999',
+        quantity: null,
+        rate: '18.00',
+        taxableValue: '45.25',
+        components: ['CGST 4.07', 'SGST 4.07'],
+        total: '53.39',
+      },
+    ]);
+    // The lines add up to the document totals: 1909.51 + 1909.49 + 45.25 + 45.25 = 3909.50;
+    // 1966.79 + 2253.21 + 46.61 + 53.39 = 4320.00 = taxable 3909.50 + tax 410.50.
+    expect(money(document.lines.reduce((a, l) => a.plus(l.taxableValue), new Decimal(0)))).toBe(
+      money(document.taxableTotal),
+    );
+    expect(money(document.lines.reduce((a, l) => a.plus(l.total), new Decimal(0)))).toBe(
+      money(document.grandTotal),
+    );
+    expect([
+      money(document.taxableTotal),
+      money(document.taxTotal),
+      money(document.grandTotal),
+    ]).toEqual(['3909.50', '410.50', '4320.00']);
+
+    // 2) Text actually drawn in the PDF.
+    const runs = pdfRuns(pdf);
+    const texts = runs.map((r) => r.text);
+    const rows = pdfRows(runs);
+    expect(texts).toContain('TAX INVOICE');
+    expect(texts).toContain('Original for Recipient');
+    // Seller block.
+    expect(texts).toContain('Example Jewels Pvt Ltd');
+    expect(texts).toContain('1 Zaveri Bazaar, Mumbai - 400002');
+    expect(texts).toContain('GSTIN: 27ABCDE1234F1Z5 | State: Maharashtra (27)');
+    // Invoice number / dates (IST) / place of supply.
+    expect(texts).toContain('Invoice No: INV/2627/000001');
+    expect(texts).toContain('Invoice date: 19-11-2026');
+    expect(texts).toContain('Order No: ORD-261118-00001');
+    expect(texts).toContain('Order date: 18-11-2026');
+    expect(texts).toContain('Place of supply: Maharashtra (27)');
+    // Buyer blocks.
+    expect(blockLines(runs, 'Bill to')).toEqual([
+      'Riya Sharma',
+      '12 MG Road',
+      'Pune - 411001',
+      'State code: 27',
+    ]);
+    expect(blockLines(runs, 'Ship to')).toEqual([
+      'Asha Sharma',
+      '4 Lake View',
+      'Baner',
+      'Pune - 411045',
+      'State code: 27',
+    ]);
+    // Line table: header + one row per line with HSN, rate, taxable value, each component, total.
+    const header = rows.findIndex((r) => r[0] === '#');
+    expect(rows.slice(header, header + 5)).toEqual([
+      ['#', 'Description', 'HSN', 'Qty', 'Rate %', 'Taxable', 'CGST', 'SGST', 'Total'],
+      [
+        '1',
+        'Silver ring - Size 7 (SKU RNG-7)',
+        '7113',
+        '1',
+        '3.00',
+        '1,909.51',
+        '28.64',
+        '28.64',
+        '1,966.79',
+      ],
+      [
+        '2',
+        'Gift hamper (SKU HMP-2)',
+        '9999',
+        '2',
+        '18.00',
+        '1,909.49',
+        '171.86',
+        '171.86',
+        '2,253.21',
+      ],
+      // Shipping lines carry no quantity (blank cell → nothing drawn).
+      ['3', 'Shipping', '7113', '3.00', '45.25', '0.68', '0.68', '46.61'],
+      ['4', 'Shipping', '9999', '18.00', '45.25', '4.07', '4.07', '53.39'],
+    ]);
+    // Totals: CGST 28.64 + 171.86 + 0.68 + 4.07 = 205.25 (same for SGST).
+    expect(texts).toContain('Taxable total 3,909.50 | CGST 205.25 | SGST 205.25 | Round off 0.00');
+    expect(texts).toContain('GRAND TOTAL Rs. 4,320.00');
+    expect(texts).toContain('Amount in words: Rupees Four Thousand Three Hundred Twenty Only');
+    expect(texts).toContain('Payment: ONLINE');
+    expect(texts).toContain('For Example Jewels Pvt Ltd - Authorised Signatory');
+    expect(texts.join('\n')).not.toContain('IGST');
+  });
+
+  it('FR-TAX-013: inter-state tax invoice prints a single IGST component, buyer GSTIN and round-off', async () => {
+    // Inter-state supply (Maharashtra → Karnataka): IGST 57.28 + 343.72 on goods, one residual
+    // shipping row 90.50 + 9.10. Taxable 1909.51 + 1909.49 + 90.50 = 3909.50; IGST
+    // 57.28 + 343.72 + 9.10 = 410.10; 3909.50 + 410.10 = 4319.60, round-off +0.40 → 4320.00.
+    const base = invoiceRow();
+    const { db } = setup(
+      invoiceRow({
+        supplyType: 'INTER_STATE',
+        buyerGstin: '29AAACS1234K1Z6',
+        placeOfSupplyStateCode: '29',
+        posState: { name: 'Karnataka' },
+        taxTotal: new Decimal('410.10'),
+        grandTotal: new Decimal('4320.00'),
+        taxTransactions: [
+          ledger(null, 'SHIPPING', 'IGST', '7113', '10.06', '90.50', '9.10'),
+          ledger(L1, 'ITEM', 'IGST', '7113', '3.00', '1909.51', '57.28'),
+          ledger(L2, 'ITEM', 'IGST', '9999', '18.00', '1909.49', '343.72'),
+        ],
+        order: {
+          ...base.order,
+          buyerLegalName: 'Sharma Traders LLP',
+          paymentMethod: 'COD',
+          roundOff: new Decimal('0.40'),
+          shippingAddressSnapshot: {
+            fullName: 'Asha Sharma',
+            line1: '7 Residency Road',
+            city: 'Bengaluru',
+            pincode: '560025',
+            stateCode: '29',
+          },
+        },
+      }),
+    );
+    const { pdf, document } = await buildInvoicePdf(
+      db,
+      { orderId: ORDER_ID, type: 'TAX_INVOICE', invoiceNumber: 'INV/2627/000001' },
+      { generatedAt: NOW, reprint: true },
+    );
+    expect(lineView(document)).toEqual([
+      {
+        description: 'Silver ring - Size 7 (SKU RNG-7)',
+        hsnCode: '7113',
+        quantity: 1,
+        rate: '3.00',
+        taxableValue: '1909.51',
+        components: ['IGST 57.28'],
+        total: '1966.79', // 1909.51 + 57.28
+      },
+      {
+        description: 'Gift hamper (SKU HMP-2)',
+        hsnCode: '9999',
+        quantity: 2,
+        rate: '18.00',
+        taxableValue: '1909.49',
+        components: ['IGST 343.72'],
+        total: '2253.21', // 1909.49 + 343.72
+      },
+      {
+        description: 'Shipping',
+        hsnCode: '7113',
+        quantity: null,
+        rate: '10.06',
+        taxableValue: '90.50',
+        components: ['IGST 9.10'],
+        total: '99.60', // 90.50 + 9.10
+      },
+    ]);
+    expect([
+      money(document.taxableTotal),
+      money(document.taxTotal),
+      money(document.roundOff),
+      money(document.grandTotal),
+    ]).toEqual(['3909.50', '410.10', '0.40', '4320.00']);
+
+    const runs = pdfRuns(pdf);
+    const texts = runs.map((r) => r.text);
+    const rows = pdfRows(runs);
+    expect(texts).toContain('REPRINT - Duplicate copy');
+    expect(texts).toContain('Place of supply: Karnataka (29)');
+    // B2B buyer: legal name replaces the customer name and the GSTIN closes the block.
+    expect(blockLines(runs, 'Bill to')).toEqual([
+      'Sharma Traders LLP',
+      '12 MG Road',
+      'Pune - 411001',
+      'State code: 27',
+      'GSTIN: 29AAACS1234K1Z6',
+    ]);
+    expect(blockLines(runs, 'Ship to')).toEqual([
+      'Asha Sharma',
+      '7 Residency Road',
+      'Bengaluru - 560025',
+      'State code: 29',
+    ]);
+    const header = rows.findIndex((r) => r[0] === '#');
+    expect(rows.slice(header, header + 4)).toEqual([
+      ['#', 'Description', 'HSN', 'Qty', 'Rate %', 'Taxable', 'IGST', 'Total'],
+      [
+        '1',
+        'Silver ring - Size 7 (SKU RNG-7)',
+        '7113',
+        '1',
+        '3.00',
+        '1,909.51',
+        '57.28',
+        '1,966.79',
+      ],
+      ['2', 'Gift hamper (SKU HMP-2)', '9999', '2', '18.00', '1,909.49', '343.72', '2,253.21'],
+      ['3', 'Shipping', '7113', '10.06', '90.50', '9.10', '99.60'],
+    ]);
+    // IGST total 57.28 + 343.72 + 9.10 = 410.10; no CGST / SGST anywhere on the document.
+    expect(texts).toContain('Taxable total 3,909.50 | IGST 410.10 | Round off 0.40');
+    expect(texts).toContain('GRAND TOTAL Rs. 4,320.00');
+    expect(texts).toContain('Payment: COD');
+    expect(texts.join('\n')).not.toMatch(/CGST|SGST/);
   });
 });
 

@@ -4,19 +4,26 @@
  * passes the environment), so it is unit-tested with fake URLs in the default suite
  * (`tests/unit/dbHarness/guard.test.ts`).
  *
- * Rules (all must pass):
+ * Rules (all must pass, checked in this order):
+ *  0. `NODE_ENV` must not be `production` or `staging`.
  *  1. `DB_TESTS_CONFIRM` must be exactly `ecommerce_test` (explicit, second opt-in).
- *  2. `DB_TEST_DATABASE_URL` is required. There is NO fallback to `DATABASE_URL`; when
- *     `DATABASE_URL` is present it must differ from the test URL (never the runtime credential).
+ *  2. `DB_TEST_DATABASE_URL` is required. There is NO fallback to `DATABASE_URL`. When
+ *     `DATABASE_URL` / `MIGRATION_DATABASE_URL` are present, the test URL must differ from them
+ *     (never the runtime or the migration credential).
  *  3. The URL (raw and percent-decoded, case-insensitive) must not contain `ecommerce_dev`,
- *     `ecommerce_prod` or `production` anywhere (database, user, password, host, query).
+ *     `ecommerce_prod`, `ecommerce_staging`, `ecommerce_live` or `production` anywhere (database,
+ *     user, password, host, query).
  *  4. Only `mysql:` / `mariadb:` URLs are accepted.
  *  5. The database name must be EXACTLY `ecommerce_test` (case-sensitive, single path segment).
  *  6. The host must be `localhost` or `127.0.0.1`, unless `DB_TESTS_ALLOW_NON_LOCAL_HOST` is set
  *     to EXACTLY the URL's host name (a per-host, explicit override).
+ *  7. A user name is required; it must not be `root` and must not be the user name of
+ *     `DATABASE_URL` / `MIGRATION_DATABASE_URL` (a dedicated test-only DML user is required).
+ *  8. The port, when given, must be 1–65535.
  *
  * Error messages name variables and rules only. They never include the URL, user name, password,
- * host or any other value taken from the URL.
+ * host or any other value taken from the URL (the only quoted values are the fixed, public names
+ * in `FORBIDDEN_URL_FRAGMENTS` and `REQUIRED_DATABASE`).
  */
 
 export const DB_TEST_URL_VAR = 'DB_TEST_DATABASE_URL';
@@ -26,9 +33,17 @@ export const REQUIRED_DATABASE = 'ecommerce_test';
 export const FORBIDDEN_URL_FRAGMENTS: readonly string[] = [
   'ecommerce_dev',
   'ecommerce_prod',
+  'ecommerce_staging',
+  'ecommerce_live',
   'production',
 ];
 export const LOCAL_HOSTS: readonly string[] = ['localhost', '127.0.0.1'];
+/** Environments in which the harness never runs, whatever else is set. */
+export const FORBIDDEN_NODE_ENVS: readonly string[] = ['production', 'staging'];
+/** Other credentials of this project: the test URL must not reuse them (string or user name). */
+export const OTHER_CREDENTIAL_VARS: readonly string[] = ['DATABASE_URL', 'MIGRATION_DATABASE_URL'];
+/** Administrative accounts that must never run the tests (compared case-insensitively). */
+export const FORBIDDEN_USERS: readonly string[] = ['root'];
 
 export class DbTestGuardError extends Error {
   constructor(message: string) {
@@ -63,11 +78,25 @@ function safeDecode(text: string): string | null {
   }
 }
 
+/** User name of another credential variable, or null when it is absent / not a URL. */
+function userOf(rawUrl: string): string | null {
+  try {
+    return safeDecode(new URL(rawUrl).username);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolves and validates the real-database test target from `env`.
  * Throws `DbTestGuardError` on any violation; never returns a target that failed a rule.
  */
 export function resolveDbTestTarget(env: Env): DbTestTarget {
+  // 0. Never in a production-like environment.
+  if (FORBIDDEN_NODE_ENVS.includes(value(env, 'NODE_ENV').toLowerCase())) {
+    throw new DbTestGuardError('NODE_ENV names a production-like environment.');
+  }
+
   // 1. Explicit second opt-in.
   if (value(env, DB_TEST_CONFIRM_VAR) !== REQUIRED_DATABASE) {
     throw new DbTestGuardError(
@@ -82,11 +111,12 @@ export function resolveDbTestTarget(env: Env): DbTestTarget {
       `${DB_TEST_URL_VAR} is not set (there is no fallback to DATABASE_URL).`,
     );
   }
-  const runtimeUrl = value(env, 'DATABASE_URL');
-  if (runtimeUrl !== '' && runtimeUrl === raw) {
-    throw new DbTestGuardError(
-      `${DB_TEST_URL_VAR} must not be the same connection string as DATABASE_URL.`,
-    );
+  for (const other of OTHER_CREDENTIAL_VARS) {
+    if (value(env, other) === raw) {
+      throw new DbTestGuardError(
+        `${DB_TEST_URL_VAR} must not be the same connection string as ${other}.`,
+      );
+    }
   }
 
   // 3. Forbidden fragments anywhere in the URL (raw and decoded, case-insensitive).
@@ -94,7 +124,9 @@ export function resolveDbTestTarget(env: Env): DbTestTarget {
   const haystacks = [raw.toLowerCase(), (decodedWhole ?? '').toLowerCase()];
   for (const fragment of FORBIDDEN_URL_FRAGMENTS) {
     if (haystacks.some((h) => h.includes(fragment))) {
-      throw new DbTestGuardError(`${DB_TEST_URL_VAR} contains a forbidden fragment ("${fragment}").`);
+      throw new DbTestGuardError(
+        `${DB_TEST_URL_VAR} contains a forbidden fragment ("${fragment}").`,
+      );
     }
   }
 
@@ -136,6 +168,19 @@ export function resolveDbTestTarget(env: Env): DbTestTarget {
   const password = safeDecode(url.password);
   if (user === null || user === '' || password === null) {
     throw new DbTestGuardError(`${DB_TEST_URL_VAR} must include a valid user name.`);
+  }
+  if (FORBIDDEN_USERS.includes(user.toLowerCase())) {
+    throw new DbTestGuardError(
+      `${DB_TEST_URL_VAR} must use a dedicated test-only user, not an administrative account.`,
+    );
+  }
+  for (const other of OTHER_CREDENTIAL_VARS) {
+    const otherRaw = value(env, other);
+    if (otherRaw !== '' && userOf(otherRaw) === user) {
+      throw new DbTestGuardError(
+        `${DB_TEST_URL_VAR} must use a dedicated test-only user, not the user of ${other}.`,
+      );
+    }
   }
   const port = url.port === '' ? 3306 : Number(url.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {

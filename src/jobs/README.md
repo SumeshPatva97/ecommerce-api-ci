@@ -1,6 +1,6 @@
 # Background Jobs
 
-**Status:** scheduler (`scheduler.ts`, `registry.ts`) run by the **dedicated worker process** (`src/worker.ts`, D-61, Batch 9 — pending acceptance); **off by default** (`JOBS_ENABLED=false`) and **exactly one worker process** may run. The API process never runs jobs. Tested with a mocked DB only. Full coverage table and deviations: [`docs/PHASE4-JOBS-AND-SCHEDULING.md`](../../docs/PHASE4-JOBS-AND-SCHEDULING.md).
+**Status:** scheduler (`scheduler.ts`, `registry.ts`) run by the **dedicated worker process** (`src/worker.ts`, D-61, Batch 9 — accepted for offline mocked scope only, 2026-11-24); **off by default** (`JOBS_ENABLED=false`) and **exactly one worker process** may run. The API process never runs jobs. Tested with a mocked DB only. Full coverage table and deviations: [`docs/PHASE4-JOBS-AND-SCHEDULING.md`](../../docs/PHASE4-JOBS-AND-SCHEDULING.md).
 
 ## Decisions/constraints
 

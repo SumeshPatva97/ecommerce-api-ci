@@ -10,6 +10,9 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
+import { createApp } from '../../../../src/app.js';
+import type { AppContainer } from '../../../../src/container.js';
+import { Readiness } from '../../../../src/core/health/readiness.js';
 import { Prisma } from '../../../../src/generated/prisma/client.js';
 import {
   MockPaymentProviderAdapter,
@@ -17,6 +20,7 @@ import {
   signMockPaymentWebhook,
 } from '../../../../src/integrations/payments/paymentProvider.js';
 import { createPaymentsModule } from '../../../../src/modules/payments/index.js';
+import { buildModules } from '../../../../src/routes/v1.js';
 import { buildModuleTestApp } from '../../../helpers/container.js';
 import { expectAdminRoutesGuarded } from '../../../helpers/routeTable.js';
 import { IDS } from '../checkout/fixtures.js';
@@ -514,5 +518,78 @@ describe('admin payments', () => {
       .get(`/api/v1/admin/payments/${IDS.order}`)
       .set(staff.headers);
     expect(missing.status).toBe(404);
+  });
+});
+
+/**
+ * Security control PW-08 / finding A9-F02 — endpoint-level protection.
+ *
+ * `createContainer` refuses the mock gateway in production (tests/unit/core/container.test.ts), so
+ * such a container cannot be built the normal way. The one below is assembled by hand: it stands
+ * for a container built some other way, which the payments module must still stop.
+ */
+describe('mock gateway with a production configuration (PW-08)', () => {
+  function productionMockSetup(world: WorldOptions = {}) {
+    const base = setup(world);
+    const container: AppContainer = {
+      ...base.t.container,
+      config: { ...base.t.container.config, nodeEnv: 'production' },
+    };
+    const app = createApp({
+      config: base.t.container.config,
+      logger: base.t.container.logger,
+      readiness: new Readiness(),
+      container,
+      modules: buildModules(container, [createPaymentsModule]),
+    });
+    return { ...base, app };
+  }
+
+  it('POST /payments/verify refuses a correctly signed mock callback: 503, nothing written, order unchanged', async () => {
+    const { app, auth, t, w } = productionMockSetup();
+    const res = await request(app)
+      .post('/api/v1/payments/verify')
+      .set(auth)
+      .set('Idempotency-Key', idem())
+      .send(verifyBody());
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('SERVICE_UNAVAILABLE');
+    expect(t.m.paymentTransaction.create).not.toHaveBeenCalled();
+    expect(t.m.inventoryTransaction.createMany).not.toHaveBeenCalled();
+    expect(t.m.orderStatusHistory.create).not.toHaveBeenCalled();
+    expect(t.m.notification.create).not.toHaveBeenCalled();
+    expect(w.order.status).toBe('PENDING_PAYMENT');
+    expect(w.payments[0]?.status).toBe('PENDING');
+    expect(w.reservations.every((r) => r.status === 'ACTIVE')).toBe(true);
+  });
+
+  it('the same signed callback is still captured outside production (the mock stays usable in tests)', async () => {
+    const { t, auth, w } = setup();
+    expect(t.container.config.nodeEnv).toBe('test');
+    const res = await request(t.app)
+      .post('/api/v1/payments/verify')
+      .set(auth)
+      .set('Idempotency-Key', idem())
+      .send(verifyBody());
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ orderStatus: 'CONFIRMED', paymentStatus: 'CAPTURED' });
+    expect(w.order.status).toBe('CONFIRMED');
+  });
+
+  it('POST /webhooks/payments/mock answers 404 for a correctly signed event and stores nothing', async () => {
+    const { app, t, w } = productionMockSetup();
+    const raw = JSON.stringify(capturedEvent());
+    const ts = Math.floor(t.now.value.getTime() / 1000);
+    const res = await request(app)
+      .post('/api/v1/webhooks/payments/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-mock-timestamp', String(ts))
+      .set('x-mock-signature', signMockPaymentWebhook(raw, ts))
+      .send(raw);
+    expect(res.status).toBe(404);
+    expect(t.m.paymentTransaction.create).not.toHaveBeenCalled();
+    expect(t.m.inventoryTransaction.createMany).not.toHaveBeenCalled();
+    expect(w.order.status).toBe('PENDING_PAYMENT');
+    expect(w.payments[0]?.status).toBe('PENDING');
   });
 });

@@ -4,7 +4,7 @@
 --
 -- Used by tests/db/harness/cleanup.ts (parsed, allow-listed statement by statement) and runnable
 -- by the owner with the mysql client against ecommerce_test:
---   mysql --defaults-extra-file=<git-ignored option file> ecommerce_test < tests/db/sql/cleanup.sql
+--   mysql --defaults-extra-file=<git-ignored option file> ecommerce_test -e "source tests/db/sql/cleanup.sql"
 --
 -- * DML only (UPDATE / DELETE). No DROP, TRUNCATE, ALTER or CREATE: the test user has DML grants
 --   on ecommerce_test only, and TRUNCATE would need the DROP privilege.

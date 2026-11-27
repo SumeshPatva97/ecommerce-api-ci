@@ -17,7 +17,9 @@ import {
 const SECRET = 'S3cr3t-pa55';
 const GOOD_URL = `mysql://dbtest_user:${SECRET}@localhost:3306/ecommerce_test`;
 
-function env(overrides: Record<string, string | undefined> = {}): Record<string, string | undefined> {
+function env(
+  overrides: Record<string, string | undefined> = {},
+): Record<string, string | undefined> {
   return { [DB_TEST_CONFIRM_VAR]: 'ecommerce_test', [DB_TEST_URL_VAR]: GOOD_URL, ...overrides };
 }
 
@@ -45,7 +47,9 @@ describe('DEC-12 DB test guard — accepts', () => {
 
   it('127.0.0.1, default port, mariadb scheme, percent-encoded password, query string', () => {
     const t = resolveDbTestTarget(
-      env({ [DB_TEST_URL_VAR]: 'mariadb://u:p%40ss%2Fw@127.0.0.1/ecommerce_test?connectTimeout=5' }),
+      env({
+        [DB_TEST_URL_VAR]: 'mariadb://u:p%40ss%2Fw@127.0.0.1/ecommerce_test?connectTimeout=5',
+      }),
     );
     expect(t.host).toBe('127.0.0.1');
     expect(t.port).toBe(3306);
@@ -78,9 +82,64 @@ describe('DEC-12 DB test guard — accepts', () => {
     );
     expect(t.database).toBe('ecommerce_test');
   });
+
+  it('other credential variables that are not URLs do not block a valid target', () => {
+    const t = resolveDbTestTarget(
+      env({ DATABASE_URL: 'not a url', MIGRATION_DATABASE_URL: '   ' }),
+    );
+    expect(t.user).toBe('dbtest_user');
+  });
+
+  it.each([['test'], ['development'], [undefined], ['']])('NODE_ENV = %s', (nodeEnv) => {
+    expect(resolveDbTestTarget(env({ NODE_ENV: nodeEnv })).database).toBe('ecommerce_test');
+  });
 });
 
 describe('DEC-12 DB test guard — refuses', () => {
+  it('an empty environment (fail closed by default)', () => {
+    const error = refusal({});
+    expect(error.name).toBe('DbTestGuardError');
+    expect(error.message).toContain('[DEC-12 guard]');
+    expect(error.message).toContain(DB_TEST_CONFIRM_VAR);
+    expect(error.message).toContain('Refusing to run real-database tests.');
+  });
+
+  it('a valid URL alone, without the confirmation variable', () => {
+    expect(refusal({ [DB_TEST_URL_VAR]: GOOD_URL }).message).toContain(DB_TEST_CONFIRM_VAR);
+  });
+
+  it('the confirmation alone, without the URL variable', () => {
+    expect(refusal({ [DB_TEST_CONFIRM_VAR]: 'ecommerce_test' }).message).toContain(DB_TEST_URL_VAR);
+  });
+
+  it.each([['production'], ['staging'], ['PRODUCTION'], [' Staging ']])(
+    'a production-like NODE_ENV (%s), even with everything else valid',
+    (nodeEnv) => {
+      expect(refusal(env({ NODE_ENV: nodeEnv })).message).toContain('NODE_ENV');
+    },
+  );
+
+  it('when the test URL is the migration credential', () => {
+    expect(refusal(env({ MIGRATION_DATABASE_URL: GOOD_URL })).message).toContain(
+      'MIGRATION_DATABASE_URL',
+    );
+  });
+
+  it.each([
+    ['DATABASE_URL', 'mysql://dbtest_user:other-password@localhost:3306/another_db'],
+    ['MIGRATION_DATABASE_URL', 'mysql://dbtest_user:other-password@127.0.0.1:3306/ecommerce_test'],
+  ])('when the test user is also the user of %s', (name, otherUrl) => {
+    const error = refusal(env({ [name]: otherUrl }));
+    expect(error.message).toContain('dedicated test-only user');
+    expect(error.message).toContain(name);
+    expect(error.message).not.toContain('dbtest_user');
+  });
+
+  it.each([['root'], ['ROOT'], ['Root']])('the administrative user %s', (user) => {
+    const error = refusal(env({ [DB_TEST_URL_VAR]: `mysql://${user}:p@localhost/ecommerce_test` }));
+    expect(error.message).toContain('administrative account');
+  });
+
   it.each([
     ['missing', undefined],
     ['empty', ''],
@@ -114,6 +173,9 @@ describe('DEC-12 DB test guard — refuses', () => {
     ['production in the host', 'mysql://u:p@production.example.com/ecommerce_test'],
     ['percent-encoded dev name', 'mysql://u:p@localhost/%65commerce_dev'],
     ['upper-case prod name', 'mysql://u:p@localhost/ECOMMERCE_PROD'],
+    ['staging database', 'mysql://u:p@localhost:3306/ecommerce_staging'],
+    ['live database', 'mysql://u:p@localhost:3306/ecommerce_live'],
+    ['staging name in the query', 'mysql://u:p@localhost/ecommerce_test?schema=ecommerce_staging'],
   ])('a URL with a forbidden fragment (%s)', (_label, url) => {
     expect(refusal(env({ [DB_TEST_URL_VAR]: url })).message).toContain('forbidden fragment');
   });

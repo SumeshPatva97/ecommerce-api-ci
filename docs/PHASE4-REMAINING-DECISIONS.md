@@ -260,6 +260,8 @@ no Redis/BullMQ. Report: `docs/PHASE4-BATCH9-COMPLETION-REPORT.md`.
 - **Multi-server / distributed scheduling:** DEFERRED.
 - **Redis / BullMQ:** not implemented and not authorized.
 
+**Status update 2026-11-24 (Batch 9 acceptance):** Batch 9 was accepted by the owner as **ACCEPTED — OFFLINE MOCKED SCOPE ONLY** (record: `PHASE3-PHASE4-MASTER-PROGRESS-REPORT.md` §18). This supersedes "pending acceptance" in the heading of this section and "still PENDING" in the 2026-11-20 summary above; both are kept as written. D-61 is unchanged: an architecture-only decision. The acceptance does not cover MySQL, real operating-system signals, two worker processes, real providers, deployment or production readiness. Multi-server scheduling stays deferred; Redis / BullMQ is not authorized.
+
 The analysis below is kept as originally written (decision history).
 
 The in-process scheduler (`JOBS_ENABLED`, default `false`) has **no distributed lock**. §14 requires a

@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import type { ErrorCode } from '../errors/errorCodes.js';
 import type { ErrorDetail } from '../errors/AppError.js';
 import type { PageMeta } from './pagination.js';
+import { isPubliclyCacheable, payloadEtag } from './publicCache.js';
 import { assertDeclaredSuccessStatus } from './successStatus.js';
 
 /**
@@ -41,6 +42,14 @@ export function ok<T>(
     status,
     `${req.method} ${req.baseUrl}${typeof routePath === 'string' ? routePath : ''}`,
   );
+  // Publicly cacheable GETs: the ETag must not depend on `requestId` (see publicCache.ts).
+  // Express then compares it with `If-None-Match` and answers 304.
+  if (status === 200 && isPubliclyCacheable(res)) {
+    res.setHeader(
+      'ETag',
+      payloadEtag(options.meta === undefined ? { data } : { data, meta: options.meta }),
+    );
+  }
   res.status(status).json(body);
 }
 
