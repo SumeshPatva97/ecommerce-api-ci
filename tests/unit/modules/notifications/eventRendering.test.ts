@@ -469,6 +469,10 @@ describe('TC-060 DF-03 ORDER_OUT_FOR_DELIVERY COD variant (NOTIFICATION_WORKFLOW
     expect(implicitVariant('ORDER_OUT_FOR_DELIVERY', { codAmount: '2499.00' })).toBe(COD_VARIANT);
     expect(implicitVariant('ORDER_OUT_FOR_DELIVERY', {})).toBeUndefined();
     expect(implicitVariant('ORDER_OUT_FOR_DELIVERY', { codAmount: '' })).toBeUndefined();
+    // Missing / invalid amount: falls back to the standard (prepaid) template, never a COD
+    // message without an amount.
+    expect(implicitVariant('ORDER_OUT_FOR_DELIVERY', { codAmount: null })).toBeUndefined();
+    expect(implicitVariant('ORDER_OUT_FOR_DELIVERY', { codAmount: undefined })).toBeUndefined();
     expect(implicitVariant('ORDER_SHIPPED', { codAmount: '2499.00' })).toBeUndefined();
 
     const enqueueOfd = async (variables: Record<string, TemplateValue>) => {
@@ -565,9 +569,14 @@ describe('TC-060 outbox: token-bearing events and the secret-variable guard', ()
     'razorpayOrderId',
     'razorpay_payment_id',
     'gatewayReference',
+    'gatewayRef',
+    'accountNumber',
+    'account_number',
     'password',
     'newPassword',
+    'passwordHash',
     'resetToken',
+    'passwordResetToken',
     'otpCode',
     'cardLast4',
     'bank_account_number',
@@ -588,23 +597,29 @@ describe('TC-060 outbox: token-bearing events and the secret-variable guard', ()
     }
   });
 
-  it.each(['upiId', 'razorpayPaymentId', 'paymentId', 'gatewayReference'])(
-    'DF-02 enqueue refuses "%s" and queues nothing',
-    async (name) => {
-      const { db, m } = createMockDb();
-      const service = createNotificationService({ clock: () => NOW });
-      await expect(
-        service.enqueue(db, {
-          event: 'PAYMENT_SUCCEEDED',
-          channels: ['EMAIL', 'WHATSAPP'],
-          recipientUserId: USER,
-          to: { email: 'asha@example.test', phone: '+919812345678' },
-          variables: { ...sampleVariables('PAYMENT_SUCCEEDED'), [name]: 'x' },
-        }),
-      ).rejects.toThrow(/looks secret/);
-      expect(m.notification.create).not.toHaveBeenCalled();
-    },
-  );
+  it.each([
+    'upiId',
+    'razorpayPaymentId',
+    'paymentId',
+    'gatewayReference',
+    'gatewayRef',
+    'accountNumber',
+    'passwordHash',
+    'resetToken',
+  ])('DF-02 enqueue refuses "%s" and queues nothing', async (name) => {
+    const { db, m } = createMockDb();
+    const service = createNotificationService({ clock: () => NOW });
+    await expect(
+      service.enqueue(db, {
+        event: 'PAYMENT_SUCCEEDED',
+        channels: ['EMAIL', 'WHATSAPP'],
+        recipientUserId: USER,
+        to: { email: 'asha@example.test', phone: '+919812345678' },
+        variables: { ...sampleVariables('PAYMENT_SUCCEEDED'), [name]: 'x' },
+      }),
+    ).rejects.toThrow(/looks secret/);
+    expect(m.notification.create).not.toHaveBeenCalled();
+  });
 
   /** Events whose own template variables trip the secret guard (none since DF-01). */
   const KNOWN_SELF_BLOCKED: readonly NotificationEvent[] = [];

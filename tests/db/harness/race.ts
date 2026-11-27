@@ -34,7 +34,9 @@ export async function race<T>(n: number, op: (index: number) => Promise<T>): Pro
 }
 
 /** Runs heterogeneous operations through the same barrier. */
-export async function raceAll(ops: readonly (() => Promise<unknown>)[]): Promise<Settled<unknown>[]> {
+export async function raceAll(
+  ops: readonly (() => Promise<unknown>)[],
+): Promise<Settled<unknown>[]> {
   return race(ops.length, (i) => {
     const op = ops[i];
     if (op === undefined) throw new Error('race index out of range');
@@ -46,7 +48,7 @@ export async function raceAll(ops: readonly (() => Promise<unknown>)[]): Promise
 export function errorLabel(error: unknown): string {
   if (error instanceof AppError) return error.code;
   if (isPrismaKnownError(error)) return `PRISMA_${error.code}`;
-  if (error instanceof Error) return `${error.name}`;
+  if (error instanceof Error) return error.name;
   return 'UNKNOWN';
 }
 

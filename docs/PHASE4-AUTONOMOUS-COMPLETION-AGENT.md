@@ -22,14 +22,14 @@ This document is the agent definition. Any session (or subagent) continuing Phas
 
 ## 2. Sources of truth (no competing roadmap)
 
-| Purpose                      | Document                                                                               |
-| ---------------------------- | -------------------------------------------------------------------------------------- |
-| Task inventory and IDs       | `docs/PHASE4-MASTER-COMPLETION-ROADMAP.md` (P4-MASTER-ROADMAP-01)                      |
-| Live status of those IDs     | `docs/PHASE4-AUTONOMOUS-COMPLETION-STATUS.md`                                          |
-| Headline project status      | `docs/PHASE3-PHASE4-MASTER-PROGRESS-REPORT.md` §1                                      |
-| Phase plan and G4 definition | `project-documentation/10-project-management/IMPLEMENTATION_ROADMAP.md` (Phase 4 rows) |
-| Open decisions               | `docs/PHASE4-REMAINING-DECISIONS.md` and roadmap §4-G                                  |
-| Database gates               | `docs/INCREMENT-B-MASTER-ROADMAP-G2-G8.md`, `docs/G2-EXECUTION-LOG.md`                 |
+| Purpose                      | Document                                                                                                                                                                                                                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task inventory and IDs       | `docs/PHASE4-MASTER-COMPLETION-ROADMAP.md` (P4-MASTER-ROADMAP-01)                                                                                                                                                                                                                      |
+| Live status of those IDs     | `docs/PHASE4-AUTONOMOUS-COMPLETION-STATUS.md`                                                                                                                                                                                                                                          |
+| Headline project status      | `docs/PHASE3-PHASE4-MASTER-PROGRESS-REPORT.md` §1                                                                                                                                                                                                                                      |
+| Phase plan and G4 definition | `project-documentation/10-project-management/IMPLEMENTATION_ROADMAP.md` (Phase 4 rows). _(Canonical location, verified 2026-11-24. From 2026-11-21 until 2026-11-24 the file sat in `02-architecture/`; it was moved back on the owner's authorization and its content is unchanged.)_ |
+| Open decisions               | `docs/PHASE4-REMAINING-DECISIONS.md` and roadmap §4-G                                                                                                                                                                                                                                  |
+| Database gates               | `docs/INCREMENT-B-MASTER-ROADMAP-G2-G8.md`, `docs/G2-EXECUTION-LOG.md`                                                                                                                                                                                                                 |
 
 New tasks are recorded in the status tracker with a reference to the roadmap ID they refine. They are
 never added to a second roadmap.

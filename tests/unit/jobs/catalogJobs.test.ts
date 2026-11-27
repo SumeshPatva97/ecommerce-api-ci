@@ -182,6 +182,45 @@ describe('runBestSellerRefresh', () => {
     expect((fields.err as Error).message).toBe('lock wait timeout');
   });
 
+  it('WP10-2: product A fails, product B succeeds → { products: 2, updated: 1, errors: 1 }', async () => {
+    const t = buildModuleTestApp([], { now: NOW });
+    t.m.orderItem.groupBy.mockResolvedValue([
+      { productId: 'a', _sum: { quantity: 4, quantityCancelled: 0 } },
+      { productId: 'b', _sum: { quantity: 5, quantityCancelled: 0 } },
+    ]);
+    t.m.product.findMany.mockResolvedValue([
+      { id: 'a', totalSold: 0 },
+      { id: 'b', totalSold: 0 },
+    ]);
+    t.m.product.update.mockImplementation((args: { where: { id: string } }) =>
+      args.where.id === 'a'
+        ? Promise.reject(new Error('write failed'))
+        : Promise.resolve({ id: args.where.id }),
+    );
+    // The FIRST product fails: the run still reaches and writes the second one.
+    await expect(runBestSellerRefresh(t.container)).resolves.toEqual({
+      products: 2,
+      updated: 1,
+      errors: 1,
+    });
+    expect(t.m.product.update.mock.calls.map((c): unknown => c[0].where.id)).toEqual(['a', 'b']);
+  });
+
+  it('WP10-2: a failure outside the per-product loop still fails the whole run (job-level handling intact)', async () => {
+    const t = buildModuleTestApp([], { now: NOW });
+    const logError = vi.spyOn(t.container.logger, 'error');
+    t.m.orderItem.groupBy.mockRejectedValue(new Error('aggregate query failed'));
+    await expect(runBestSellerRefresh(t.container)).rejects.toThrow('aggregate query failed');
+
+    t.m.orderItem.groupBy.mockResolvedValue([]);
+    t.m.product.findMany.mockRejectedValue(new Error('product read failed'));
+    await expect(runBestSellerRefresh(t.container)).rejects.toThrow('product read failed');
+
+    // Not swallowed and not counted as a per-product error; nothing was written.
+    expect(t.m.product.update).not.toHaveBeenCalled();
+    expect(logError).not.toHaveBeenCalled();
+  });
+
   it('WP10-5: honours catalog.best_seller_window_days when it is valid', async () => {
     const t = buildModuleTestApp([], { now: NOW });
     t.m.setting.findUnique.mockResolvedValue({ value: 30 });
@@ -205,6 +244,11 @@ describe('runBestSellerRefresh', () => {
     ['non-integer', { value: 12.5 }],
     ['string', { value: '30' }],
     ['null value', { value: null }],
+    ['negative', { value: -30 }],
+    ['NaN', { value: Number.NaN }],
+    ['boolean', { value: true }],
+    ['object', { value: { days: 30 } }],
+    ['array', { value: [30] }],
   ])('WP10-5: falls back to 90 days when the setting is %s', async (_label, row) => {
     const t = buildModuleTestApp([], { now: NOW });
     t.m.setting.findUnique.mockResolvedValue(row);
@@ -316,5 +360,41 @@ describe('runRatingAggregate', () => {
     const [fields] = logError.mock.calls[0] as unknown as [Record<string, unknown>];
     expect(fields.productId).toBe('b');
     expect((fields.err as Error).message).toBe('row lock failed');
+  });
+
+  it('WP10-2: product A fails, product B succeeds → { products: 2, updated: 1, errors: 1 }', async () => {
+    const t = buildModuleTestApp([], { now: NOW });
+    t.m.review.groupBy.mockResolvedValue([
+      { productId: 'a', _avg: { rating: 4 }, _count: { _all: 1 } },
+      { productId: 'b', _avg: { rating: 3 }, _count: { _all: 1 } },
+    ]);
+    t.m.product.findMany.mockResolvedValue([
+      { id: 'a', avgRating: new Prisma.Decimal('0'), reviewCount: 0 },
+      { id: 'b', avgRating: new Prisma.Decimal('0'), reviewCount: 0 },
+    ]);
+    t.m.review.aggregate.mockResolvedValue({ _avg: { rating: 3 }, _count: { _all: 1 } });
+    t.m.$queryRaw.mockImplementation((_sql: unknown, id: unknown) =>
+      id === 'a' ? Promise.reject(new Error('row lock failed')) : Promise.resolve([]),
+    );
+    await expect(runRatingAggregate(t.container)).resolves.toEqual({
+      products: 2,
+      updated: 1,
+      errors: 1,
+    });
+    expect(t.m.product.update.mock.calls.map((c): unknown => c[0].where.id)).toEqual(['b']);
+  });
+
+  it('WP10-2: a failure outside the per-product loop still fails the whole run (job-level handling intact)', async () => {
+    const t = buildModuleTestApp([], { now: NOW });
+    const logError = vi.spyOn(t.container.logger, 'error');
+    t.m.review.groupBy.mockRejectedValue(new Error('aggregate query failed'));
+    await expect(runRatingAggregate(t.container)).rejects.toThrow('aggregate query failed');
+
+    t.m.review.groupBy.mockResolvedValue([]);
+    t.m.product.findMany.mockRejectedValue(new Error('product read failed'));
+    await expect(runRatingAggregate(t.container)).rejects.toThrow('product read failed');
+
+    expect(t.m.product.update).not.toHaveBeenCalled();
+    expect(logError).not.toHaveBeenCalled();
   });
 });

@@ -70,7 +70,7 @@ code or configuration was changed for this.
 
 - GST-15: the pure part passes (`NO_ASSIGNMENT`, not a silent 0 %). Blocking the order is DB-backed:
   TODO.
-- GST-17: TODO, DEFERRED (B2B disabled, OQ-24).
+- GST-17: TODO, DEFERRED (B2B disabled, OQ-24). _(Clarification 2026-11-27: "DEFERRED" is the 2026-11-20 wording of this report and is kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
 
 ### C. Route × role permission matrix (`tests/integration/routeRoleMatrix.test.ts`) — 1,113 PASS, no defect
 
@@ -164,6 +164,8 @@ Severity uses `TESTING_STRATEGY.md` §19 (S1–S4), **pending DEC-14**.
 | Now covered (mocked)                                                                | Remains partial                                                                                                                                                                                                                                                                          |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | TC-003, 006, 008 (see DC-04), 009, 010, 014, 017, 019, 028, 044, 046, 054, 057, 063 | TC-043: complete except GST-15 (DB part) and GST-17 (deferred). TC-060: three defects. **Need a real database (DEC-12):** TC-004, 030, 041, 045, 048, 051. **Not in scope of this package:** TC-025 (UI half), TC-033 (barcode decode), TC-047 (golden report dataset), TC-070 (FE half) |
+
+_(Clarification 2026-11-27, cell "Remains partial": "GST-17 (deferred)" is the 2026-11-20 wording and is kept as written. GST-17 is not formally deferred. It remains pending OQ-24; no owner-approved deferral is recorded. The B2B portion of FR-TAX-018 and FR-RPT-009 remains subject to the owner's OQ-24 decision.)_
 
 The QA-03 draft carries a dated verification section reflecting this.
 

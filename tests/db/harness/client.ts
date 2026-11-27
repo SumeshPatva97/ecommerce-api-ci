@@ -29,7 +29,9 @@ export function createTestPrismaClient(target: DbTestTarget, poolSize: number): 
 export async function assertServerDatabase(db: PrismaClient): Promise<void> {
   const rows = await db.$queryRaw<{ db: string | null }[]>`SELECT DATABASE() AS db`;
   if (rows[0]?.db !== REQUIRED_DATABASE) {
-    throw new DbTestGuardError(`the server reports a current database other than "${REQUIRED_DATABASE}".`);
+    throw new DbTestGuardError(
+      `the server reports a current database other than "${REQUIRED_DATABASE}".`,
+    );
   }
 }
 

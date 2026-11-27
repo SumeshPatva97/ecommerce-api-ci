@@ -1,0 +1,17 @@
+# Keeps local secrets and host build output out of the Docker build context.
+# The build stage of the Dockerfile runs `COPY . .`, so anything not listed here is copied.
+# Added 2026-11-24 (security control SH-10). Never validated by an image build.
+
+# Local environment files (may hold secrets) — never part of an image
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Host dependencies and build output — the image installs and builds its own
+node_modules
+dist
+coverage
+
+# Version control
+.git

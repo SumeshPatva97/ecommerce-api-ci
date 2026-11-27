@@ -211,3 +211,138 @@ describe('background jobs and courier webhook secret (Batch 7 missing tests)', (
     ).toBe('courier-test-secret');
   });
 });
+
+/**
+ * Security finding A9-F05 — the strict-environment rules of `crossFieldProblems`
+ * (src/core/config/env.ts) that had no test: the secrets required in staging/production and the
+ * COOKIE_SECURE rule. Every env record is built in memory from BASE_TEST_ENV + PRODUCTION_SECRETS
+ * (throw-away key material generated per run); no env file is read.
+ */
+describe('strict environments: required secrets and COOKIE_SECURE (finding A9-F05)', () => {
+  const STRICT_ENVS = ['production', 'staging'] as const;
+  const RELAXED_ENVS = ['development', 'test'] as const;
+  const REQUIRED_SECRETS = [
+    'JWT_ACCESS_PRIVATE_KEY',
+    'JWT_ACCESS_PUBLIC_KEY',
+    'REFRESH_TOKEN_PEPPER',
+    'FIELD_ENCRYPTION_KEY',
+  ] as const;
+  const OPTIONAL_SECRETS = [
+    'PASSWORD_PEPPER',
+    'PAYMENT_WEBHOOK_SECRET',
+    'SHIPPING_WEBHOOK_SECRET',
+  ] as const;
+
+  /** An otherwise valid staging/production record (https everywhere, all required secrets). */
+  function strictEnv(
+    nodeEnv: string,
+    overrides: Record<string, string | undefined> = {},
+  ): Record<string, string | undefined> {
+    return {
+      ...PRODUCTION_SECRETS,
+      NODE_ENV: nodeEnv,
+      API_BASE_URL: 'https://api.example.com',
+      STOREFRONT_URL: 'https://www.example.com',
+      ADMIN_URL: 'https://admin.example.com',
+      CORS_ORIGINS: 'https://www.example.com,https://admin.example.com',
+      ...overrides,
+    };
+  }
+
+  const strictCases = STRICT_ENVS.flatMap((nodeEnv) =>
+    REQUIRED_SECRETS.map((key) => [nodeEnv, key] as const),
+  );
+
+  it.each(STRICT_ENVS)('accepts a complete %s configuration', (nodeEnv) => {
+    const config = load(strictEnv(nodeEnv));
+    expect(config.nodeEnv).toBe(nodeEnv);
+    expect(config.auth.jwt.privateKeyPem).toContain('-----BEGIN');
+    expect(config.auth.jwt.publicKeyPem).toContain('-----BEGIN');
+    expect(config.auth.refresh.pepper).toBe(PRODUCTION_SECRETS.REFRESH_TOKEN_PEPPER);
+    expect(config.auth.fieldEncryptionKey).toBe(PRODUCTION_SECRETS.FIELD_ENCRYPTION_KEY);
+  });
+
+  it.each(strictCases)('%s: rejects a configuration without %s', (nodeEnv, key) => {
+    const problems = problemsOf(strictEnv(nodeEnv, { [key]: undefined }));
+    expect(problems).toContain(`${key}: Required outside development/test.`);
+  });
+
+  it.each(STRICT_ENVS)(
+    '%s: reports every missing required secret in one ConfigError',
+    (nodeEnv) => {
+      const problems = problemsOf(
+        strictEnv(nodeEnv, Object.fromEntries(REQUIRED_SECRETS.map((key) => [key, undefined]))),
+      );
+      for (const key of REQUIRED_SECRETS) {
+        expect(problems).toContain(`${key}: Required outside development/test.`);
+      }
+    },
+  );
+
+  it.each(strictCases)('%s: treats a blank %s as missing', (nodeEnv, key) => {
+    for (const blank of ['', '   ']) {
+      const problems = problemsOf(strictEnv(nodeEnv, { [key]: blank }));
+      expect(problems).toContain(`${key}: Required outside development/test.`);
+    }
+  });
+
+  it.each(strictCases)(
+    '%s: the error for a missing %s names variables only, never secret values',
+    (nodeEnv, key) => {
+      const text = problemsOf(strictEnv(nodeEnv, { [key]: undefined })).join('\n');
+      for (const secret of REQUIRED_SECRETS) {
+        const value = PRODUCTION_SECRETS[secret];
+        if (value === undefined) throw new Error(`test fixture is missing ${secret}`);
+        expect(text).not.toContain(value);
+      }
+    },
+  );
+
+  it.each(RELAXED_ENVS)(
+    '%s: boots without the secrets that strict environments require',
+    (nodeEnv) => {
+      const config = load({
+        NODE_ENV: nodeEnv,
+        ...Object.fromEntries(REQUIRED_SECRETS.map((key) => [key, undefined])),
+      });
+      expect(config.nodeEnv).toBe(nodeEnv);
+      expect(config.auth.jwt.privateKeyPem).toBeUndefined();
+      expect(config.auth.jwt.publicKeyPem).toBeUndefined();
+      expect(config.auth.refresh.pepper).toBeUndefined();
+      expect(config.auth.fieldEncryptionKey).toBeUndefined();
+    },
+  );
+
+  it.each(STRICT_ENVS)('%s: rejects COOKIE_SECURE=false', (nodeEnv) => {
+    const problems = problemsOf(strictEnv(nodeEnv, { COOKIE_SECURE: 'false' }));
+    expect(problems).toEqual(['COOKIE_SECURE: Cookies must be Secure outside development.']);
+  });
+
+  it.each(STRICT_ENVS)('%s: cookies are Secure when COOKIE_SECURE is unset or true', (nodeEnv) => {
+    expect(load(strictEnv(nodeEnv, { COOKIE_SECURE: undefined })).auth.cookies.secure).toBe(true);
+    expect(load(strictEnv(nodeEnv, { COOKIE_SECURE: 'true' })).auth.cookies.secure).toBe(true);
+  });
+
+  it.each(RELAXED_ENVS)(
+    '%s: COOKIE_SECURE defaults to false and may be set either way',
+    (nodeEnv) => {
+      expect(load({ NODE_ENV: nodeEnv, COOKIE_SECURE: undefined }).auth.cookies.secure).toBe(false);
+      expect(load({ NODE_ENV: nodeEnv, COOKIE_SECURE: 'false' }).auth.cookies.secure).toBe(false);
+      expect(load({ NODE_ENV: nodeEnv, COOKIE_SECURE: 'true' }).auth.cookies.secure).toBe(true);
+    },
+  );
+
+  it.each(STRICT_ENVS)(
+    'is accepted in %s without PASSWORD_PEPPER, PAYMENT_WEBHOOK_SECRET or SHIPPING_WEBHOOK_SECRET (PW-07: currently optional)',
+    (nodeEnv) => {
+      // Documents current behaviour only — these three are `optionalSecret` in every environment
+      // and are not in the strict-environment required list. This is not an endorsement (PW-07).
+      const config = load(
+        strictEnv(nodeEnv, Object.fromEntries(OPTIONAL_SECRETS.map((key) => [key, undefined]))),
+      );
+      expect(config.auth.password.pepper).toBeUndefined();
+      expect(config.integrations.paymentWebhookSecret).toBeUndefined();
+      expect(config.integrations.shippingWebhookSecret).toBeUndefined();
+    },
+  );
+});

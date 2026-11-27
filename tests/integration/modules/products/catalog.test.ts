@@ -158,9 +158,171 @@ describe('GET /products', () => {
       },
     ]);
   });
+
+  // FR-PL-013 — only the implemented part (catalog.service.ts buildWhere `q` clause). Brand,
+  // category and attribute-value search are NOT implemented (owner decision pending) and are
+  // deliberately neither asserted nor excluded here (`arrayContaining`, not an exact match).
+  it('FR-PL-013: listing q searches name, searchKeywords and shortDescription, and matches SKU by prefix (as implemented)', async () => {
+    t.m.product.findMany.mockResolvedValue([cardRow()]);
+    t.m.product.count.mockResolvedValue(1);
+    const res = await request(t.app).get('/api/v1/products').query({ q: '  ear-meera ' });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+
+    const where = lastWhere();
+    const search = where.AND.find(
+      (clause) => Array.isArray(clause.OR) && JSON.stringify(clause.OR).includes('"contains"'),
+    );
+    // The query is trimmed; text fields use `contains` with the query as typed.
+    expect(search?.OR).toEqual(
+      expect.arrayContaining([
+        { name: { contains: 'ear-meera' } },
+        { searchKeywords: { contains: 'ear-meera' } },
+        { shortDescription: { contains: 'ear-meera' } },
+        // SKU: upper-cased PREFIX match on ACTIVE variants — `startsWith`, not `equals`.
+        {
+          variants: {
+            some: { status: 'ACTIVE', deletedAt: null, sku: { startsWith: 'EAR-MEERA' } },
+          },
+        },
+      ]),
+    );
+    // Search narrows the visible catalogue: it is ANDed with the visibility clause.
+    expect(where.AND[0]).toMatchObject({ status: 'ACTIVE', deletedAt: null });
+    // The count query uses the same filter as the page query.
+    expect(t.m.product.count.mock.calls.at(-1)?.[0].where).toEqual(where);
+    // With `q` and no explicit sort the listing sorts by "relevance" (popularity order).
+    expect(res.body.meta).toMatchObject({ sort: 'relevance', totalItems: 1 });
+    expect(res.body.meta.filters.q).toBe('ear-meera');
+    expect(t.m.product.findMany.mock.calls.at(-1)?.[0].orderBy).toEqual([
+      { isBestSellerPinned: 'desc' },
+      { totalSold: 'desc' },
+      { id: 'asc' },
+    ]);
+  });
+
+  it('FR-PL-013: listing without q adds no search clause and echoes no q filter', async () => {
+    const res = await request(t.app).get('/api/v1/products?sort=relevance');
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(lastWhere())).not.toMatch(/"contains"|"startsWith"/);
+    expect(res.body.meta.filters).not.toHaveProperty('q');
+    // `sort=relevance` is meaningless without a query → falls back to "newest".
+    expect(res.body.meta.sort).toBe('newest');
+  });
+
+  it('FR-PL-013: listing q must be 2–100 characters after trimming (422 on q), also on /products/facets', async () => {
+    const list = (q: string) => request(t.app).get('/api/v1/products').query({ q });
+    for (const q of ['a', ' a ', '   ', 'x'.repeat(101)]) {
+      const res = await list(q);
+      expect(res.status, JSON.stringify(q)).toBe(422);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect((res.body.error.details as { field: string }[]).map((d) => d.field)).toEqual(['q']);
+    }
+    expect(t.m.product.findMany).not.toHaveBeenCalled();
+
+    expect((await list('ab')).status).toBe(200);
+    expect((await list('x'.repeat(100))).status).toBe(200);
+
+    const facets = await request(t.app).get('/api/v1/products/facets').query({ q: 'a' });
+    expect(facets.status).toBe(422);
+    expect((facets.body.error.details as { field: string }[]).map((d) => d.field)).toEqual(['q']);
+  });
 });
 
+/** Detail row (catalog `detailSelect`) with no optional content; override per test. */
+function detailRow(overrides: Record<string, unknown> = {}) {
+  return {
+    ...cardRow(),
+    categoryId: 'cat-leaf',
+    shortDescription: null,
+    description: null,
+    careInstructions: null,
+    seoTitle: null,
+    seoDescription: null,
+    countryOfOrigin: null,
+    manufacturerName: null,
+    manufacturerAddress: null,
+    importerName: null,
+    importerAddress: null,
+    collections: [],
+    attributeValues: [],
+    images: [],
+    ...overrides,
+  };
+}
+
 describe('GET /products/:slug', () => {
+  it('FR-SF-018: returns the product SEO overrides, canonicalPath and a root-first breadcrumb', async () => {
+    t.m.product.findFirst.mockResolvedValue(
+      detailRow({
+        slug: 'meera-kundan-jhumka',
+        name: 'Meera Kundan Jhumka',
+        categoryId: 'cat-jhumkas',
+        shortDescription: 'Hand-set kundan jhumka.',
+        seoTitle: 'Buy Meera Kundan Jhumka Online',
+        seoDescription: 'Hand-set kundan jhumka earrings with pearl drops. Free shipping.',
+      }),
+    );
+    const chain: Record<string, { name: string; slug: string; parentId: string | null }> = {
+      'cat-jhumkas': { name: 'Jhumkas', slug: 'jhumkas', parentId: 'cat-earrings' },
+      'cat-earrings': { name: 'Earrings', slug: 'earrings', parentId: 'cat-jewellery' },
+      'cat-jewellery': { name: 'Jewellery', slug: 'jewellery', parentId: null },
+    };
+    t.m.category.findUnique.mockImplementation((args: { where: { id: string } }) =>
+      Promise.resolve(chain[args.where.id] ?? null),
+    );
+
+    const res = await request(t.app).get('/api/v1/products/meera-kundan-jhumka');
+    expect(res.status).toBe(200);
+    const d = res.body.data;
+    expect(d.seo).toEqual({
+      title: 'Buy Meera Kundan Jhumka Online',
+      description: 'Hand-set kundan jhumka earrings with pearl drops. Free shipping.',
+      canonicalPath: '/products/meera-kundan-jhumka',
+    });
+    // Root → leaf, name + slug only (no ids / parentId leak).
+    expect(d.breadcrumb).toEqual([
+      { name: 'Jewellery', slug: 'jewellery' },
+      { name: 'Earrings', slug: 'earrings' },
+      { name: 'Jhumkas', slug: 'jhumkas' },
+    ]);
+    // The chain is walked upwards from the product's own category.
+    expect(
+      t.m.category.findUnique.mock.calls.map((c) => (c[0] as { where: { id: string } }).where.id),
+    ).toEqual(['cat-jhumkas', 'cat-earrings', 'cat-jewellery']);
+    // The SEO columns are part of the public detail select.
+    expect(t.m.product.findFirst.mock.calls[0]?.[0].select).toMatchObject({
+      seoTitle: true,
+      seoDescription: true,
+      categoryId: true,
+    });
+    // Anonymous detail is cacheable (crawlers / SSR).
+    expect(res.headers['cache-control']).toBe('public, max-age=60, stale-while-revalidate=300');
+  });
+
+  it('FR-SF-018: SEO falls back to the product name and shortDescription; breadcrumb is [] when the category is not found', async () => {
+    t.m.product.findFirst.mockResolvedValue(
+      detailRow({ name: 'Tara Silver Ring', shortDescription: 'Sterling silver band.' }),
+    );
+    const withShort = await request(t.app).get('/api/v1/products/tara-silver-ring');
+    expect(withShort.status).toBe(200);
+    expect(withShort.body.data.seo).toEqual({
+      title: 'Tara Silver Ring',
+      description: 'Sterling silver band.',
+      canonicalPath: '/products/tara-silver-ring',
+    });
+    // primeEmptyDb: category.findUnique → null, so the chain stops immediately.
+    expect(withShort.body.data.breadcrumb).toEqual([]);
+
+    t.m.product.findFirst.mockResolvedValue(detailRow({ name: 'Tara Silver Ring' }));
+    const bare = await request(t.app).get('/api/v1/products/tara-silver-ring');
+    expect(bare.body.data.seo).toEqual({
+      title: 'Tara Silver Ring',
+      description: null,
+      canonicalPath: '/products/tara-silver-ring',
+    });
+  });
+
   it('returns 404 when the product is not visible (unpublished, inactive or deleted)', async () => {
     const res = await request(t.app).get('/api/v1/products/draft-ring');
     expect(res.status).toBe(404);
@@ -438,6 +600,78 @@ describe('GET /products/:slug/related and /search/autocomplete', () => {
     ]);
     const where = t.m.product.findMany.mock.calls[0]?.[0].where as Where;
     expect(where.AND).toEqual(expect.arrayContaining([{ id: { not: 'self' } }]));
+  });
+
+  // TC-027 "attributes": catalog.service.ts `related` — shared FILTERABLE attribute values widen
+  // the candidate query and add +1 to the score per shared value (collection 3, category 2, brand 1).
+  it('TC-027: related products match and rank by shared filterable attribute values (+1 each, ties by totalSold)', async () => {
+    t.m.product.findFirst.mockResolvedValue({
+      id: 'self',
+      categoryId: 'cat',
+      brandId: null,
+      collections: [],
+      attributeValues: [{ attributeValueId: 'val-kundan' }, { attributeValueId: 'val-brass' }],
+    });
+    const cand = (slug: string, o: Record<string, unknown>) => ({
+      ...cardRow({ slug }),
+      categoryId: 'other',
+      brandId: null,
+      collections: [],
+      attributeValues: [],
+      totalSold: 0,
+      ...o,
+    });
+    const values = (...ids: string[]) => ids.map((attributeValueId) => ({ attributeValueId }));
+    t.m.product.findMany.mockResolvedValue([
+      // score 1 — one shared value; best seller, but a lower score still ranks last
+      cand('one-shared', { attributeValues: values('val-brass', 'val-other'), totalSold: 999 }),
+      // score 2 — two shared values, different category
+      cand('two-shared', { attributeValues: values('val-kundan', 'val-brass'), totalSold: 1 }),
+      // score 2 — same category, no shared value (ties with two-shared, sells more)
+      cand('category-only', { categoryId: 'cat', totalSold: 5 }),
+      // score 3 — same category + one shared value
+      cand('category-and-value', { categoryId: 'cat', attributeValues: values('val-kundan') }),
+    ]);
+
+    const res = await request(t.app).get('/api/v1/products/meera/related');
+    expect(res.status).toBe(200);
+    expect((res.body.data as { slug: string }[]).map((p) => p.slug)).toEqual([
+      'category-and-value',
+      'category-only',
+      'two-shared',
+      'one-shared',
+    ]);
+    expect(res.body.meta).toMatchObject({ totalItems: 4, limit: 12 });
+
+    // Only filterable attributes of the current product take part.
+    expect(t.m.product.findFirst.mock.calls[0]?.[0].select.attributeValues).toEqual({
+      where: { attribute: { isFilterable: true } },
+      select: { attributeValueId: true },
+    });
+    // Candidates may match on a shared attribute value alone (OR with category).
+    const where = t.m.product.findMany.mock.calls[0]?.[0].where as Where;
+    const match = where.AND.find((clause) => Array.isArray(clause.OR));
+    expect(match?.OR).toEqual([
+      { categoryId: 'cat' },
+      { attributeValues: { some: { attributeValueId: { in: ['val-kundan', 'val-brass'] } } } },
+    ]);
+  });
+
+  it('TC-027: a product without filterable attribute values adds no attribute clause to the related query', async () => {
+    t.m.product.findFirst.mockResolvedValue({
+      id: 'self',
+      categoryId: 'cat',
+      brandId: null,
+      collections: [],
+      attributeValues: [],
+    });
+    const res = await request(t.app).get('/api/v1/products/meera/related');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([]);
+    const where = t.m.product.findMany.mock.calls[0]?.[0].where as Where;
+    expect(where.AND.find((clause) => Array.isArray(clause.OR))?.OR).toEqual([
+      { categoryId: 'cat' },
+    ]);
   });
 
   it('ranks exact SKU matches first and validates q length', async () => {

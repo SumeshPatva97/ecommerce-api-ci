@@ -9,11 +9,19 @@ import { describe, expect, it } from 'vitest';
 
 import type { Prisma } from '../../../../src/generated/prisma/client.js';
 import { MockPaymentProviderAdapter } from '../../../../src/integrations/payments/paymentProvider.js';
-import { checkoutModuleWith } from '../../../../src/modules/checkout/index.js';
+import {
+  MockShippingProviderAdapter,
+  createShippingProviderRegistry,
+} from '../../../../src/integrations/shipping/shippingProvider.js';
+import {
+  checkoutModuleWith,
+  createCheckoutModule,
+} from '../../../../src/modules/checkout/index.js';
 import { buildModuleTestApp } from '../../../helpers/container.js';
 import {
   IDS,
   NOW,
+  address,
   couponRow,
   jhumka,
   primeCheckout,
@@ -568,5 +576,153 @@ describe('POST /checkout/orders', () => {
       t.m.inventoryTransaction.createMany.mock.calls[0]?.[0] as { data: { type: string }[] }
     ).data;
     expect(ledger.every((e) => e.type === 'ORDER_DEDUCTION')).toBe(true);
+  });
+});
+
+/**
+ * TC-049 — "Serviceability check blocks non-serviceable pincode (OQ-07)" at checkout.
+ * checkout.service.ts `prepare()` asks the serviceability collaborator for the SHIPPING address
+ * pincode on both the quote and the placement; `serviceable === false` → 422
+ * `PINCODE_NOT_SERVICEABLE` on `shippingAddressId`. PROVISIONAL (OQ-07): fake courier only.
+ */
+describe('TC-049 — serviceability gate at checkout', () => {
+  const ADDR_REMOTE = '33333333-3333-4333-8333-333333333309';
+  const NOT_SERVICEABLE = {
+    field: 'shippingAddressId',
+    code: 'PINCODE_NOT_SERVICEABLE',
+    message: 'We do not deliver to this pincode yet.',
+  };
+
+  /** Pune (411045) plus an address at 999001 — the fixture stub and the mock courier refuse 9xxxxx. */
+  function withRemoteAddress(t: ReturnType<typeof setup>['t']) {
+    t.m.userAddress.findMany.mockResolvedValue([
+      address(IDS.addrPune, '27', 'Maharashtra', '411045', 'Pune'),
+      address(ADDR_REMOTE, '27', 'Maharashtra', '999001', 'Remote Town'),
+    ]);
+  }
+
+  function expectNothingPlaced(t: ReturnType<typeof setup>['t']) {
+    expect(t.m.order.create).not.toHaveBeenCalled();
+    expect(t.m.orderItem.createMany).not.toHaveBeenCalled();
+    expect(t.m.stockReservation.create).not.toHaveBeenCalled();
+    expect(t.m.couponUsage.create).not.toHaveBeenCalled();
+    expect(t.m.payment.create).not.toHaveBeenCalled();
+    expect(t.m.paymentTransaction.create).not.toHaveBeenCalled();
+    expect(t.m.cart.update).not.toHaveBeenCalled();
+    expect(t.m.notification.create).not.toHaveBeenCalled();
+  }
+
+  it('TC-049: POST /checkout/summary answers 422 PINCODE_NOT_SERVICEABLE for a non-serviceable shipping pincode, before pricing the cart', async () => {
+    const { t, auth } = setup();
+    withRemoteAddress(t);
+    const res = await request(t.app)
+      .post('/api/v1/checkout/summary')
+      .set(auth)
+      .send(summaryBody({ shippingAddressId: ADDR_REMOTE }));
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.details).toEqual([NOT_SERVICEABLE]);
+    expect(t.m.cart.findFirst).not.toHaveBeenCalled();
+
+    // Only the SHIPPING pincode is checked: billing to the remote address is fine.
+    const billing = await request(t.app)
+      .post('/api/v1/checkout/summary')
+      .set(auth)
+      .send(summaryBody({ billingAddressId: ADDR_REMOTE }));
+    expect(billing.status).toBe(200);
+    expect(billing.body.data.issues).toEqual([]);
+  });
+
+  it('TC-049: POST /checkout/orders blocks placement to a non-serviceable pincode — 422, no order, reservation, coupon usage or payment', async () => {
+    const { t, auth } = setup();
+    withRemoteAddress(t);
+    const { quoteHash } = await quote(t, auth); // quoted for the serviceable Pune address
+    const res = await request(t.app)
+      .post('/api/v1/checkout/orders')
+      .set(auth)
+      .set('Idempotency-Key', IDEM)
+      .send(placeBody(quoteHash, { shippingAddressId: ADDR_REMOTE }));
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error.details).toEqual([NOT_SERVICEABLE]);
+    expect(t.m.$transaction).not.toHaveBeenCalled();
+    expectNothingPlaced(t);
+  });
+
+  it('TC-049: placement re-checks serviceability — a pincode that stopped being serviceable after the quote is refused', async () => {
+    let open = true;
+    const t = buildModuleTestApp(
+      [
+        checkoutModuleWith({
+          serviceability: async (pincode) => ({
+            ...(await serviceable(pincode)),
+            serviceable: open,
+          }),
+        }),
+      ],
+      { now: NOW },
+    );
+    const auth = t.customer({ userId: IDS.user }).headers;
+    primeCheckout(t.m, IDS.user);
+    const { quoteHash } = await quote(t, auth);
+
+    open = false;
+    const res = await request(t.app)
+      .post('/api/v1/checkout/orders')
+      .set(auth)
+      .set('Idempotency-Key', IDEM)
+      .send(placeBody(quoteHash));
+    expect(res.status).toBe(422);
+    expect(res.body.error.details).toEqual([NOT_SERVICEABLE]);
+    expectNothingPlaced(t);
+  });
+
+  it('TC-049: default wiring asks the shipping provider — the mock courier refuses 9xxxxx on summary and placement', async () => {
+    const t = buildModuleTestApp([createCheckoutModule], { now: NOW });
+    const auth = t.customer({ userId: IDS.user }).headers;
+    primeCheckout(t.m, IDS.user);
+    withRemoteAddress(t);
+
+    const ok = await request(t.app).post('/api/v1/checkout/summary').set(auth).send(summaryBody());
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.issues).toEqual([]);
+    // ETA comes from the courier (411045 is a mock "metro" prefix), not the 3–6 days of the method.
+    expect(ok.body.data.shipping.estimatedDelivery).toEqual({ minDays: 2, maxDays: 4 });
+
+    const summary = await request(t.app)
+      .post('/api/v1/checkout/summary')
+      .set(auth)
+      .send(summaryBody({ shippingAddressId: ADDR_REMOTE }));
+    expect(summary.status).toBe(422);
+    expect(summary.body.error.details).toEqual([NOT_SERVICEABLE]);
+
+    const place = await request(t.app)
+      .post('/api/v1/checkout/orders')
+      .set(auth)
+      .set('Idempotency-Key', IDEM)
+      .send(placeBody(ok.body.data.quoteHash as string, { shippingAddressId: ADDR_REMOTE }));
+    expect(place.status).toBe(422);
+    expect(place.body.error.details).toEqual([NOT_SERVICEABLE]);
+    expectNothingPlaced(t);
+  });
+
+  it('TC-049: a courier outage does not block the quote — issues carries SERVICEABILITY_UNVERIFIED and the ETA falls back to the method (as implemented)', async () => {
+    const t = buildModuleTestApp([createCheckoutModule], {
+      now: NOW,
+      overrides: {
+        providers: {
+          shipping: createShippingProviderRegistry([
+            new MockShippingProviderAdapter({ failServiceability: true }),
+          ]),
+        },
+      },
+    });
+    const auth = t.customer({ userId: IDS.user }).headers;
+    primeCheckout(t.m, IDS.user);
+    const res = await request(t.app).post('/api/v1/checkout/summary').set(auth).send(summaryBody());
+    expect(res.status).toBe(200);
+    expect(res.body.data.issues).toEqual([{ code: 'SERVICEABILITY_UNVERIFIED' }]);
+    expect(res.body.data.shipping.estimatedDelivery).toEqual({ minDays: 3, maxDays: 6 });
+    expect(res.body.data.totals.grandTotal).toBe('3496.00');
   });
 });

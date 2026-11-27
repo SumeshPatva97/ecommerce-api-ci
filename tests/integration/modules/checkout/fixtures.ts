@@ -125,7 +125,13 @@ export const ring = (o: LineOptions = {}) =>
     ...o,
   });
 
-function address(id: string, stateCode: string, stateName: string, pincode: string, city: string) {
+export function address(
+  id: string,
+  stateCode: string,
+  stateName: string,
+  pincode: string,
+  city: string,
+) {
   return {
     id,
     label: 'HOME',

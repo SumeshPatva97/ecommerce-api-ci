@@ -187,7 +187,12 @@ export function createPaymentsService(
   const provider = container.providers.payment;
 
   function gateway(): VerifiablePaymentProvider {
-    if (!isVerifiablePaymentProvider(provider)) {
+    // The mock adapter's client-signature secret is a public test value: never accept it in
+    // production (same rule as `handleWebhook`). Start-up already refuses it (src/container.ts).
+    if (
+      (provider.name === 'mock' && config.nodeEnv === 'production') ||
+      !isVerifiablePaymentProvider(provider)
+    ) {
       throw new AppError('SERVICE_UNAVAILABLE', 'Payment verification is not available.');
     }
     return provider;

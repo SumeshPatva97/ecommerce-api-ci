@@ -43,11 +43,25 @@ export function loadConfigOrExit(): AppConfig {
   }
 }
 
-/** Logger, database client and container for one process; no connection is opened here. */
+/**
+ * Logger, database client and container for one process; no connection is opened here.
+ *
+ * A configuration the container refuses (e.g. the mock payment provider in production, PW-08)
+ * stops the process with exit code 1, for the API and for the worker. The log line names
+ * variables only, never values.
+ */
 export function createProcessRuntime(config: AppConfig, role: ProcessRole): ProcessRuntime {
   const logger = createLogger(config).child({ process: role });
   const database = createDatabase(config, logger);
-  const container = createContainer(config, logger, database.client);
+  let container: AppContainer;
+  try {
+    container = createContainer(config, logger, database.client);
+  } catch (error) {
+    if (!(error instanceof ConfigError)) throw error;
+    logger.fatal({ problems: error.problems }, 'start-up refused: invalid configuration');
+    logger.flush();
+    process.exit(1);
+  }
   return { config, logger, database, container };
 }
 

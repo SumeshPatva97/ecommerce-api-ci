@@ -61,8 +61,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Both entry points must be produced by the build (API and dedicated worker, D-61).
+      - name: Build artefacts present
+        run: test -f dist/server.js && test -f dist/worker.js
+
       - name: OpenAPI drift check
         run: npm run openapi:check
 
-      - name: Test
-        run: npm test
+      # Runs the whole suite with the coverage floors of vitest.config.ts
+      # (lines 80, statements 80, functions 80, branches 75). Mocked database only.
+      - name: Test (with coverage floors)
+        run: npm run test:coverage
